@@ -1,12 +1,12 @@
-use std::{
-    fs::File,
-    io::Read,
-    sync::atomic::{AtomicU16, Ordering},
-};
-
 use anyhow::{Result, bail};
+use std::fs::File;
+use std::io::prelude::Read;
+use std::sync::atomic::AtomicU16;
+use std::sync::atomic::Ordering;
 
-#[allow(dead_code)]
+mod page;
+mod varint;
+
 static PAGE_SIZE: AtomicU16 = AtomicU16::new(4096);
 
 fn main() -> Result<()> {
