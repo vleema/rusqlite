@@ -4,6 +4,13 @@ use nom::sequence::delimited;
 use nom::Parser;
 use nom::{IResult, error::Error};
 
+struct Comando{
+  digitado: String,
+  colunas: &str,
+  arquivo: &str,
+  predicados: todo!()
+}
+
 struct SELECT<'a>{
   colunas: &'a str
 }
