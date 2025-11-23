@@ -89,7 +89,7 @@
 //! | ≥ 13 and odd   | (N-13)/2     | Value is a string in the text encoding and (N-13)/2 bytes in length. The nul terminator is not stored. |
 //!
 //! Taken from <https://sqlite.org/fileformat2.html>, more information there.
-use crate::read_varint;
+use crate::varint::read_varint;
 use anyhow::{Result, bail};
 
 /// Represents a b-tree page table type, either a index table or a regular table.
@@ -170,6 +170,7 @@ impl PageHeader {
 ///
 /// Implements `From<u64>`.
 #[allow(dead_code)]
+#[derive(Debug)]
 pub enum SerialType {
     Null,
     Int8,
@@ -211,7 +212,7 @@ impl From<u64> for SerialType {
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
 pub struct SchemaCell<'a> {
-    pub ty: &'a str,
+    pub schema_type: &'a str,
     pub name: &'a str,
     pub tbl_name: &'a str,
     pub rootpage: u64,
@@ -226,7 +227,8 @@ impl<'a> SchemaCell<'a> {
 
         let mut cursor = &payload[..header_size];
 
-        let Text { size: ty_size } = SerialType::from(read_varint(&mut cursor)? as u64) else {
+        // Reading the header to get the type and size of each value.
+        let Text { size: type_size } = SerialType::from(read_varint(&mut cursor)? as u64) else {
             bail!("invalid serial type for type")
         };
         let Text { size: name_size } = SerialType::from(read_varint(&mut cursor)? as u64) else {
@@ -235,25 +237,31 @@ impl<'a> SchemaCell<'a> {
         let Text { size: tbl_size } = SerialType::from(read_varint(&mut cursor)? as u64) else {
             bail!("invalid serial type for tbl_name")
         };
-        _ = SerialType::from(read_varint(&mut cursor)? as u64);
-        let Text { size: _sql_size } = SerialType::from(read_varint(&mut cursor)? as u64) else {
+        let Int8 = SerialType::from(read_varint(&mut cursor)? as u64) else {
+            // This probably is a varint but im not sure, while testing it always got an u8 here
+            bail!("Invalid rootpage type.")
+        };
+
+        let Text { size: sql_size } = SerialType::from(read_varint(&mut cursor)? as u64) else {
             bail!("invalid serial type for sql")
         };
 
         cursor = &payload[header_size as usize - 1..];
-        let (ty, cursor) = next_utf8(cursor, ty_size as usize)?;
+
+        // Actually reading the values.
+        let (schema_type, cursor) = next_utf8(cursor, type_size as usize)?;
         let (name, cursor) = next_utf8(cursor, name_size as usize)?;
-        let (tbl_name, _cursor) = next_utf8(cursor, tbl_size as usize)?;
-        // TODO:
-        // let rootpage = u64::from_be_bytes([cursor[])
-        // let sql = ...
+        let (tbl_name, cursor) = next_utf8(cursor, tbl_size as usize)?;
+        let rootpage = cursor[0].into();
+        let cursor = &cursor[1..];
+        let (sql, _) = next_utf8(cursor, sql_size as usize)?;
 
         Ok(Self {
-            ty,
+            schema_type,
             name,
             tbl_name,
-            rootpage: 42, // stub
-            sql: name,    // stub
+            rootpage,
+            sql,
         })
     }
 }

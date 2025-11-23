@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.68" # error handling
+clap = { version = "4.5.53", features = ["derive"] }
