@@ -1,3 +1,4 @@
+mod cli;
 mod database;
 mod record;
 mod varint;
@@ -5,28 +6,24 @@ mod varint;
 use std::fs::File;
 
 use anyhow::Ok;
-use anyhow::{Result, bail};
+use anyhow::Result;
+use clap::Parser;
 
+use cli::Args;
+use cli::Cmd;
 use database::Database;
 use database::Page;
 use record::SchemaCell;
-
 use varint::read_varint;
 
 fn main() -> Result<()> {
-    let args = std::env::args().collect::<Vec<_>>();
-    match args.len() {
-        0 | 1 => bail!("Missing <database path> and <command>"),
-        2 => bail!("Missing <command>"),
-        _ => {}
-    }
+    let Args { cmd, db_path } = Args::parse();
 
-    let file = File::open(&args[1])?;
+    let file = File::open(&db_path)?;
     let db = Database::new(&file)?;
 
-    let command = &args[2];
-    match command.as_str() {
-        ".dbinfo" => {
+    match cmd {
+        Cmd::DatabaseInfo => {
             println!("database page size: {}", db.page_size);
             if let Page::Leaf { cell_count, .. } = db.get_page(1) {
                 println!("number of tables: {}", cell_count);
@@ -58,7 +55,9 @@ fn main() -> Result<()> {
                 todo!()
             }
         }
-        _ => bail!("Missing or invalid command passed: {}", command),
+        Cmd::Sql { query } => {
+            println!("Basta rodar o comando: {query}")
+        }
     }
 
     Ok(())
