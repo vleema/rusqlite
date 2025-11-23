@@ -9,7 +9,6 @@ use rustqlite::varint::read_varint;
 use rustqlite::varint::read_varint_from_offset;
 use std::fs::File;
 use std::io::BufReader;
-use std::io::Seek;
 use std::io::prelude::Read;
 use std::sync::atomic::AtomicU16;
 use std::sync::atomic::Ordering;
@@ -96,12 +95,11 @@ fn main() -> Result<()> {
 
                     let infos_offset = (schema_cell.rootpage - 1) * page_size as u64;
 
-                    print!(
-                        "id: {rowid}, cell name: {}, Start of data: {infos_offset}\n",
+                    println!(
+                        "id: {rowid}, cell name: {}, Start of data: {infos_offset}",
                         schema_cell.name
                     );
                 }
-                println!()
             }
         }
         Comando::Sql { query } => {
