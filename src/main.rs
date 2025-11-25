@@ -41,8 +41,10 @@ fn main() -> Result<()> {
 
                     let mut cursor = &db.mmap[offset as usize..];
                     let (payload_size, payload_int_size) = read_varint(&mut cursor);
-                    let (_, _) = read_varint(&mut cursor); // rowid.
-                    let payload_body_size = payload_size - (payload_int_size) as i64;
+                    let (_, rowid_int_size) = read_varint(&mut cursor); // rowid.
+
+                    let payload_body_size =
+                        payload_size - (payload_int_size + rowid_int_size) as i64;
                     let payload_bytes = &cursor[..payload_body_size as usize];
 
                     let schema_cell = SchemaCell::new(payload_bytes);

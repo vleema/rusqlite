@@ -1,6 +1,6 @@
 use anyhow::Result;
-use memmap::Mmap;
-use memmap::MmapOptions;
+use memmap2::Mmap;
+use memmap2::MmapOptions;
 use std::fs::File;
 
 pub type PageNumber = u32;
