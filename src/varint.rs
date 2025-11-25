@@ -19,35 +19,27 @@
 //!
 //!
 //! Taken from <https://sqlite.org/fileformat2.html>, more information there.
-use anyhow::Result;
-use std::io::SeekFrom;
-use std::io::prelude::{Read, Seek};
-
-/// Reads a varint from the given reader, first seeking to the specified offset.
-///
-/// Returns the 64-bit signed integer value of the varint on sucess, or a anyhow::Error if an I/O
-/// occurs during seeking, or if the varint is malformed.
-pub fn read_varint_from_offset(reader: &mut (impl Seek + Read), offset: u64) -> Result<i64> {
-    reader.seek(SeekFrom::Start(offset))?;
-    read_varint(reader)
-}
+use std::io::Read;
 
 /// Reads a varint from the current position of the given reader.
 ///
-/// Returns the 64-bit signed integer value of the varint on sucess, or a `anyhow::Error` if the varint is malformed.
-pub fn read_varint(reader: &mut impl Read) -> Result<i64> {
+/// Returns the parsed number and the varint length.
+pub fn read_varint(buf: &mut impl Read) -> (i64, u8) {
     let mut ret = 0i64;
     let mut b = [0; 1];
 
-    for _ in 0..9 {
-        reader.read_exact(&mut b)?;
+    let mut i = 1;
+    while i <= 9 {
+        let Ok(()) = buf.read_exact(&mut b) else {
+            break;
+        };
 
         ret = ret << 7 | (b[0] & !(1 << 7)) as i64;
-
         if b[0] >> 7 == 0 {
             break;
         }
+        i += 1;
     }
 
-    Ok(ret)
+    (ret, i)
 }
