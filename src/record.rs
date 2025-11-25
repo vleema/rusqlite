@@ -114,8 +114,8 @@ impl<'a> SchemaCell<'a> {
 }
 
 fn next_utf8<'a>(v: &mut &'a [u8], size: usize) -> &'a str {
-    let len = size.min(v.len());
-    let buf = &v[..len];
-    *v = &v[len..];
+    assert!(size <= v.len());
+    let buf = &v[..size];
+    *v = &v[size..];
     std::str::from_utf8(buf).expect("invalid utf8 string")
 }
