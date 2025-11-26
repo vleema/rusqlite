@@ -1,7 +1,10 @@
+use std::fs::File;
+
 use anyhow::Result;
 use memmap2::Mmap;
 use memmap2::MmapOptions;
-use std::fs::File;
+
+use crate::varint::read_varint;
 
 pub type PageNumber = u32;
 
@@ -35,56 +38,98 @@ impl Database {
     }
 }
 
+// No support for index tables.
+const PT_INTERIOR_TABLE: u8 = 0x05;
+const PT_LEAF_TABLE: u8 = 0x0d;
+const HDR_INTERIOR: usize = 12;
+const HDR_LEAF: usize = 8;
+
+#[allow(dead_code)]
+pub struct PageCommon<'a> {
+    pub page_data: &'a [u8],
+    pub page_size: u32,
+    pub page_number: PageNumber,
+    pub cell_area_offset: u16,
+    pub cell_count: u32,
+    cell_offset_list: &'a [u8],
+}
+
+impl PageCommon<'_> {
+    pub fn cell_offset_list(&self) -> impl Iterator<Item = u16> {
+        self.cell_offset_list
+            .chunks_exact(2)
+            .map(|bs| u16::from_be_bytes([bs[0], bs[1]]))
+    }
+}
+
 #[allow(dead_code)]
 pub enum Page<'a> {
     Interior {
-        page_number: PageNumber,
-        cell_area_offset: u16,
-        cell_count: u32,
-        cell_offset_list: &'a [u8], // A offset is represent by two sequential bytes in this list.
+        common: PageCommon<'a>,
         right_child: u32,
     },
     Leaf {
-        page_number: PageNumber,
-        cell_area_offset: u16,
-        cell_count: u32,
-        cell_offset_list: &'a [u8],
+        common: PageCommon<'a>,
     },
 }
 
 impl<'a> Page<'a> {
-    fn parse(mmap: &'a Mmap, page_number: PageNumber, page_size: u32) -> Self {
-        if page_size == 0 || page_number == 0 {
-            panic!("invalid page size or page number")
-        }
+    pub fn parse(mmap: &'a Mmap, page_number: PageNumber, page_size: u32) -> Self {
+        assert!(page_size != 0 && page_number != 0);
 
-        let offset = if page_number == 1 {
-            100
+        let (offset, page_data) = if page_number == 1 {
+            (100, &mmap[..page_size as usize])
         } else {
-            ((page_number - 1) * page_size) as usize
+            let offset = ((page_number - 1) * page_size) as usize;
+            (offset, &mmap[offset..offset + page_size as usize])
         };
-
-        let page = &mmap[offset..offset + page_size as usize];
-        let page_type = page[0];
-        let cell_count = u16::from_be_bytes([page[3], page[4]]) as u32;
-        let cell_area_offset = u16::from_be_bytes([page[5], page[6]]);
-
+        let page_type = mmap[offset];
+        let cell_count = u16::from_be_bytes([mmap[offset + 3], mmap[offset + 4]]) as u32;
+        assert!(cell_count < Page::max_cell_count(page_size));
+        let cell_area_offset = u16::from_be_bytes([mmap[offset + 5], mmap[offset + 6]]);
         // Assuming that we have no index tables.
-        match page_type {
-            0x05 => Self::Interior {
-                page_number,
-                cell_area_offset,
-                cell_count,
-                cell_offset_list: &page[12..12 + cell_count as usize * 2],
-                right_child: u32::from_be_bytes([page[8], page[9], page[10], page[11]]),
+        let (header_len, right_child) = match page_type {
+            PT_INTERIOR_TABLE => {
+                let rc = u32::from_be_bytes([
+                    mmap[offset + 8],
+                    mmap[offset + 9],
+                    mmap[offset + 10],
+                    mmap[offset + 11],
+                ]);
+                (HDR_INTERIOR, Some(rc))
+            }
+            PT_LEAF_TABLE => (HDR_LEAF, None),
+            v => panic!("corrupt database, page type has value: 0x{v:x}"),
+        };
+        let cell_offset_len = (cell_count as usize) * 2;
+        let cell_offset_list = &mmap[offset + header_len..offset + header_len + cell_offset_len];
+        let common = PageCommon {
+            page_data,
+            page_size,
+            page_number,
+            cell_area_offset,
+            cell_count,
+            cell_offset_list,
+        };
+        match right_child {
+            Some(rc) => Self::Interior {
+                common,
+                right_child: rc,
             },
-            0x0d => Self::Leaf {
-                page_number,
-                cell_area_offset,
-                cell_count,
-                cell_offset_list: &page[8..8 + cell_count as usize * 2],
-            },
-            _ => panic!("corrupt database"),
+            None => Self::Leaf { common },
         }
+    }
+    pub fn common(&self) -> &PageCommon<'_> {
+        match self {
+            Self::Interior { common, .. } | Self::Leaf { common } => common,
+        }
+    }
+
+    pub fn cell_offset_list(&self) -> impl Iterator<Item = u16> {
+        self.common().cell_offset_list()
+    }
+
+    fn max_cell_count(page_size: u32) -> u32 {
+        (page_size - 8) / 6
     }
 }
