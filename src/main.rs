@@ -11,10 +11,10 @@ use clap::Parser;
 
 use cli::Args;
 use cli::Cmd;
+use database::CellInfo;
 use database::Database;
 use database::Page;
 use record::SchemaCell;
-use varint::read_varint;
 
 fn main() -> Result<()> {
     let Args {
@@ -29,27 +29,19 @@ fn main() -> Result<()> {
     match cmd {
         Some(Cmd::DatabaseInfo) => {
             println!("database page size: {}", db.page_size);
-            if let Page::Leaf { cell_count, .. } = db.get_page(1) {
-                println!("number of tables: {}", cell_count);
+            if let Page::Leaf { common } = db.get_page(1) {
+                println!("number of tables: {}", common.cell_count);
             } else {
                 todo!()
             }
         }
         Some(Cmd::Tables) => {
-            if let Page::Leaf {
-                cell_offset_list, ..
-            } = db.get_page(1)
-            {
-                for bs in cell_offset_list.chunks_exact(2) {
-                    let offset = u16::from_be_bytes([bs[0], bs[1]]);
-
-                    let mut cursor = &db.mmap[offset as usize..];
-                    let (payload_size, _) = read_varint(&mut cursor);
-                    let (_, _) = read_varint(&mut cursor); // rowid.
-
-                    let payload_bytes = &cursor[..payload_size as usize];
-
-                    let schema_cell = SchemaCell::new(payload_bytes);
+            if let pg @ Page::Leaf { .. } = db.get_page(1) {
+                for offset in pg.cell_offset_list() {
+                    let CellInfo::Leaf { payload, .. } = pg.parse_cell(offset) else {
+                        unreachable!()
+                    };
+                    let schema_cell = SchemaCell::new(payload);
                     print!("{} ", schema_cell.tbl_name)
                 }
                 println!();
