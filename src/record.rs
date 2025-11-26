@@ -74,25 +74,25 @@ impl<'a> SchemaCell<'a> {
     pub fn new(mut payload: &'a [u8]) -> Self {
         use SerialType::*;
 
-        let (header_size, header_varint_size) = read_varint(&mut payload);
-        let header_size = (header_size - header_varint_size as i64) as usize;
+        let (header_size, header_int_size) = read_varint(&mut payload);
+        let header_size = (header_size - header_int_size as i64) as usize;
 
         let mut cursor = &payload[..header_size];
         let Text { size: ty_size } = SerialType::from(read_varint(&mut cursor).0 as u64) else {
-            panic!("invalid serial type for type")
+            panic!("invalid serial type for schema type")
         };
         let Text { size: name_size } = SerialType::from(read_varint(&mut cursor).0 as u64) else {
-            panic!("invalid serial type for name")
+            panic!("invalid serial type for schema name")
         };
         let Text { size: tbl_size } = SerialType::from(read_varint(&mut cursor).0 as u64) else {
-            panic!("invalid serial type for tbl_name")
+            panic!("invalid serial type for schema tbl_name")
         };
         match read_varint(&mut cursor).0 as u64 {
             1..=6 | 8 | 9 => {}
-            _ => panic!("invalid serial type for rootpage"),
+            _ => panic!("invalid serial type for schema rootpage"),
         };
         let Text { size: sql_size } = SerialType::from(read_varint(&mut cursor).0 as u64) else {
-            panic!("invalid serial type for sql")
+            panic!("invalid serial type for schema sql")
         };
 
         cursor = &payload[header_size..];
