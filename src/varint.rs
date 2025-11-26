@@ -28,17 +28,16 @@ pub fn read_varint(buf: &mut impl Read) -> (i64, u8) {
     let mut ret = 0i64;
     let mut b = [0; 1];
 
-    let mut i = 1;
-    while i <= 9 {
-        let Ok(()) = buf.read_exact(&mut b) else {
-            break;
-        };
+    let mut i = 0;
+    while i < 9 {
+        buf.read_exact(&mut b)
+            .unwrap_or_else(|e| panic!("error while reading buffer: {e:?}"));
+        i += 1;
 
         ret = ret << 7 | (b[0] & !(1 << 7)) as i64;
         if b[0] >> 7 == 0 {
             break;
         }
-        i += 1;
     }
 
     (ret, i)
