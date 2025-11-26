@@ -6,7 +6,7 @@ mod varint;
 use std::fs::File;
 
 use anyhow::Ok;
-use anyhow::Result;
+use anyhow::{Result, bail};
 use clap::Parser;
 
 use cli::Args;
@@ -17,13 +17,17 @@ use record::SchemaCell;
 use varint::read_varint;
 
 fn main() -> Result<()> {
-    let Args { cmd, db_path } = Args::parse();
+    let Args {
+        cmd,
+        db_path,
+        query,
+    } = Args::parse();
 
     let file = File::open(&db_path)?;
     let db = Database::new(&file)?;
 
     match cmd {
-        Cmd::DatabaseInfo => {
+        Some(Cmd::DatabaseInfo) => {
             println!("database page size: {}", db.page_size);
             if let Page::Leaf { cell_count, .. } = db.get_page(1) {
                 println!("number of tables: {}", cell_count);
@@ -31,7 +35,7 @@ fn main() -> Result<()> {
                 todo!()
             }
         }
-        Cmd::Tables => {
+        Some(Cmd::Tables) => {
             if let Page::Leaf {
                 cell_offset_list, ..
             } = db.get_page(1)
@@ -53,8 +57,10 @@ fn main() -> Result<()> {
                 todo!()
             }
         }
-        Cmd::Sql { query } => {
-            println!("Basta rodar o comando: {query}")
+        None => {
+            let Some(_) = query else {
+                bail!("no command or query provided")
+            };
         }
     }
 
