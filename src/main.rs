@@ -50,9 +50,27 @@ fn main() -> Result<()> {
             }
         }
         None => {
-            let Some(_) = query else {
+            let Some(query) = query else {
                 bail!("no command or query provided")
             };
+            let Some(tbl_name) = query.split_ascii_whitespace().last() else {
+                bail!("invalid sql query")
+            };
+
+            if let pg @ Page::Leaf { .. } = db.get_page(1) {
+                for offset in pg.cell_offset_list() {
+                    let CellInfo::Leaf { payload, .. } = pg.parse_cell(offset) else {
+                        unreachable!()
+                    };
+                    let schema_cell = SchemaCell::new(payload);
+                    if schema_cell.tbl_name == tbl_name
+                        && let Page::Leaf { common } = db.get_page(schema_cell.rootpage)
+                    {
+                        println!("{}", common.cell_count);
+                        break;
+                    }
+                }
+            }
         }
     }
 
