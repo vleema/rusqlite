@@ -11,7 +11,7 @@ struct Comando{
   digitado: String,
   colunas: String,
   arquivo: String,
-  predicados: bool
+  predicados: String,
 }
 
 fn novo_comando(input: String) -> Comando{
@@ -30,18 +30,23 @@ fn novo_comando(input: String) -> Comando{
   //pega o resultado, nesse caso o arquivo
   let arquivo = String::from(parse_from.1);
 
-  //falta fazer o parse do WHERE
+  //essa linha tenta pegar oque não for ";" depois de " WHERE " do resto do parsing anteiror, retornando Ok((resto, resultado)) ou Err(algo)
+  let resultado: IResult<&str, &str, Error<&str>> = preceded(tag_no_case(" WHERE "), is_not(";")).parse(parse_from.0);
+  //essa extrai uma tupla do resultado, mandando mensagem caso seja Err
+  let parse_where = resultado.expect("erro no parse do where");
+  //pega o resultado, nesse caso o arquivo
+  let predicados = String::from(parse_where.1);
   
   Comando{
     digitado: input.clone(),
     colunas: colunas,
     arquivo: arquivo,
-    predicados: true
+    predicados: predicados
   }
 }
 
 
 fn main() {
   //teste
-  println!("{:?}", novo_comando(String::from("Select coluna from arquivo where")));
+  println!("{:?}", novo_comando(String::from("Select coluna from arquivo where alunos>2 AND media>=6;")));
 }
