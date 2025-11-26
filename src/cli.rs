@@ -5,7 +5,9 @@ pub struct Args {
     pub db_path: String,
 
     #[command(subcommand)]
-    pub cmd: Cmd,
+    pub cmd: Option<Cmd>,
+
+    pub query: Option<String>,
 }
 
 #[derive(Debug, Subcommand, Clone)]
@@ -14,6 +16,4 @@ pub enum Cmd {
     DatabaseInfo,
     #[clap(name = ".tables")]
     Tables,
-    #[clap(name = "sql")]
-    Sql { query: String },
 }
