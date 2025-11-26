@@ -2,6 +2,10 @@ use anyhow::Result;
 use memmap2::Mmap;
 use memmap2::MmapOptions;
 use std::fs::File;
+use std::u16;
+
+use crate::record::CellInfo;
+use crate::varint::read_varint;
 
 pub type PageNumber = u32;
 
@@ -24,7 +28,7 @@ impl Database {
         })
     }
 
-    pub fn get_page(&self, page_number: PageNumber) -> Page<'_> {
+    pub fn get_page(&self, page_number: PageNumber) -> Page {
         if page_number > self.page_count {
             panic!("invalid page number")
         }
@@ -33,24 +37,27 @@ impl Database {
 }
 
 #[allow(dead_code)]
-pub enum Page<'a> {
+#[derive(Debug)]
+pub enum Page {
     Interior {
+        page_payload: Vec<u8>,
         page_number: PageNumber,
         cell_area_offset: u16,
         cell_count: u32,
-        cell_offset_list: &'a [u8], // A offset is represent by two sequential bytes in this list.
+        cell_offset_list: Vec<u16>, // A offset is represent by two sequential bytes in this list.
         right_child: u32,
     },
     Leaf {
+        page_payload: Vec<u8>,
         page_number: PageNumber,
         cell_area_offset: u16,
         cell_count: u32,
-        cell_offset_list: &'a [u8],
+        cell_offset_list: Vec<u16>,
     },
 }
 
-impl<'a> Page<'a> {
-    fn parse(mmap: &'a Mmap, page_number: PageNumber, page_size: u16) -> Self {
+impl Page {
+    fn parse(mmap: &Mmap, page_number: PageNumber, page_size: u16) -> Self {
         if page_size == 0 || page_number == 0 {
             panic!("invalid page size or page number")
         }
@@ -68,20 +75,80 @@ impl<'a> Page<'a> {
 
         // Assuming that we have no index tables.
         match page_type {
-            0x05 => Self::Interior {
-                page_number,
-                cell_area_offset,
-                cell_count,
-                cell_offset_list: &page[12..12 + cell_count as usize * 2],
-                right_child: u32::from_be_bytes([page[8], page[9], page[10], page[11]]),
-            },
-            0x0d => Self::Leaf {
-                page_number,
-                cell_area_offset,
-                cell_count,
-                cell_offset_list: &page[8..8 + cell_count as usize * 2],
-            },
+            0x05 => {
+                let cell_offset_list: &Vec<u16> = &page[12..12 + cell_count as usize * 2]
+                    .chunks_exact(2)
+                    .into_iter()
+                    .map(|bs| u16::from_be_bytes([bs[0], bs[1]]))
+                    .collect();
+
+                Self::Interior {
+                    page_payload: page.to_vec(),
+                    page_number,
+                    cell_area_offset,
+                    cell_count,
+                    cell_offset_list: cell_offset_list.to_vec(),
+                    right_child: u32::from_be_bytes([page[8], page[9], page[10], page[11]]),
+                }
+            }
+
+            0x0d => {
+                let cell_offset_list: &Vec<u16> = &page[8..8 + cell_count as usize * 2]
+                    .chunks_exact(2)
+                    .into_iter()
+                    .map(|bs| u16::from_be_bytes([bs[0], bs[1]]))
+                    .collect();
+
+                Self::Leaf {
+                    page_payload: page.to_vec(),
+                    page_number,
+                    cell_area_offset,
+                    cell_count,
+                    cell_offset_list: cell_offset_list.to_vec(),
+                }
+            }
             _ => panic!("corrupt database"),
+        }
+    }
+
+    pub fn get_cells(&self) -> Vec<CellInfo> {
+        match &self {
+            Page::Interior {
+                cell_offset_list,
+                page_payload,
+                ..
+            } => {
+                cell_offset_list
+                    .iter()
+                    .map(|&cell_offset| {
+                        let mut cursor = &page_payload[cell_offset as usize..];
+
+                        let (size, _) = read_varint(&mut cursor);
+                        let (row_id, _) = read_varint(&mut cursor); // rowid.
+                        let payload = &cursor[..size as usize];
+
+                        CellInfo::new(size, row_id, payload.to_vec())
+                    })
+                    .collect()
+            }
+            Page::Leaf {
+                cell_offset_list,
+                page_payload,
+                ..
+            } => {
+                cell_offset_list
+                    .iter()
+                    .map(|&cell_offset| {
+                        let mut cursor = &page_payload[cell_offset as usize..];
+
+                        let (size, _) = read_varint(&mut cursor);
+                        let (row_id, _) = read_varint(&mut cursor); // rowid.
+                        let payload = &cursor[..size as usize];
+
+                        CellInfo::new(size, row_id, payload.to_vec())
+                    })
+                    .collect()
+            }
         }
     }
 }

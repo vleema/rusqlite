@@ -119,3 +119,20 @@ fn next_utf8<'a>(v: &mut &'a [u8], size: usize) -> &'a str {
     *v = &v[size..];
     std::str::from_utf8(buf).expect("invalid utf8 string")
 }
+
+#[derive(Debug, Clone)]
+pub struct CellInfo {
+    size: i64,
+    row_id: i64,
+    payload: Vec<u8>,
+}
+
+impl CellInfo {
+    pub fn new(size: i64, row_id: i64, payload: Vec<u8>) -> Self {
+        Self {
+            size,
+            row_id,
+            payload,
+        }
+    }
+}

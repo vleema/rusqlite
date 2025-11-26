@@ -36,9 +36,7 @@ fn main() -> Result<()> {
                 cell_offset_list, ..
             } = db.get_page(1)
             {
-                for bs in cell_offset_list.chunks_exact(2) {
-                    let offset = u16::from_be_bytes([bs[0], bs[1]]);
-
+                for &offset in cell_offset_list.iter() {
                     let mut cursor = &db.mmap[offset as usize..];
                     let (payload_size, _) = read_varint(&mut cursor);
                     let (_, _) = read_varint(&mut cursor); // rowid.
@@ -54,6 +52,36 @@ fn main() -> Result<()> {
             }
         }
         Cmd::Sql { query } => {
+            if let Page::Leaf {
+                cell_offset_list, ..
+            } = db.get_page(1)
+            {
+                let schemas: Vec<SchemaCell<'_>> = cell_offset_list
+                    .iter()
+                    .map(|&offset| {
+                        let mut cursor = &db.mmap[offset as usize..];
+                        let (payload_size, _) = read_varint(&mut cursor);
+                        let (_, _) = read_varint(&mut cursor); // rowid.
+
+                        let payload_bytes = &cursor[..payload_size as usize];
+
+                        SchemaCell::new(payload_bytes)
+                    })
+                    .collect();
+
+                let schema = schemas.iter().find(|i| i.name == query).unwrap();
+
+                let page = db.get_page(schema.rootpage);
+
+                let cells = page.get_cells();
+
+                for cell in cells {
+                    println!("{cell:?}")
+                }
+            } else {
+                todo!()
+            }
+
             println!("Basta rodar o comando: {query}")
         }
     }
