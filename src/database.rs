@@ -119,6 +119,36 @@ impl<'a> Page<'a> {
             None => Self::Leaf { common },
         }
     }
+
+    pub fn parse_cell(&self, offset: u16) -> CellInfo<'_> {
+        assert!(offset >= self.common().cell_area_offset);
+        assert!((offset as u32) < self.common().page_size);
+
+        let mut cell_content = &self.common().page_data[offset as usize..];
+        match self {
+            Self::Interior { .. } => {
+                let left_child = PageNumber::from_be_bytes([
+                    cell_content[0],
+                    cell_content[1],
+                    cell_content[2],
+                    cell_content[3],
+                ]);
+                let (rowid, _) = read_varint(&mut &cell_content[4..]);
+                CellInfo::Interior { left_child, rowid }
+            }
+            Self::Leaf { .. } => {
+                let (payload_size, _) = read_varint(&mut cell_content);
+                let (rowid, _) = read_varint(&mut cell_content);
+                let payload = &cell_content[..payload_size as usize];
+                CellInfo::Leaf {
+                    payload_size: payload_size as u64,
+                    rowid,
+                    payload,
+                }
+            }
+        }
+    }
+
     pub fn common(&self) -> &PageCommon<'_> {
         match self {
             Self::Interior { common, .. } | Self::Leaf { common } => common,
@@ -132,4 +162,17 @@ impl<'a> Page<'a> {
     fn max_cell_count(page_size: u32) -> u32 {
         (page_size - 8) / 6
     }
+}
+
+#[allow(dead_code)]
+pub enum CellInfo<'a> {
+    Interior {
+        left_child: PageNumber,
+        rowid: i64,
+    },
+    Leaf {
+        payload_size: u64,
+        rowid: i64,
+        payload: &'a [u8],
+    },
 }
