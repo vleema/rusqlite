@@ -24,7 +24,7 @@ fn main() -> Result<()> {
     } = Args::parse();
 
     let file = File::open(&db_path)?;
-    let db = Database::new(&file)?;
+    let db = Database::open(&file)?;
 
     match cmd {
         Some(Cmd::DatabaseInfo) => {
