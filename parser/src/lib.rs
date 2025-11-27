@@ -15,17 +15,19 @@ peg::parser! {
         rule boolean() -> bool
             = quiet! { ("true"/"1") { true } / ("false"/"0") { false } }
 
+        rule i(literal: &'static str)
+            = input:$([_]*<{literal.len()}>)
+                {? if input.eq_ignore_ascii_case(literal) { Ok(()) } else { Err(literal) }}
 
         rule identifier() -> &'input str
             = l:$(['a'..='z'|'A'..='Z'|'_']['a'..='z'|'A'..='Z'|'_'|'0'..='9']*) { l }
 
-        // How to implement ignore case?
         pub rule ty() -> SqlType
-            = ("INTEGER"/"INT")            { SqlType::Integer }
-            / ("VARCHAR"/"TEXT")           { SqlType::Text }
-            / ("DOUBLE"/"REAL")            { SqlType::Real }
-            / ("NUMERIC"/"BOOLEAN"/"DATE") { SqlType::Numeric }
-            / "BLOB"                       { SqlType::Blob }
+            = (i("integer")/i("int"))               { SqlType::Integer }
+            / (i("varchar")/i("text"))              { SqlType::Text }
+            / (i("double")/i("real"))               { SqlType::Real }
+            / (i("numeric")/i("boolean")/i("date")) { SqlType::Numeric }
+            / i("blob")                             { SqlType::Blob }
 
         pub rule value() -> Value<'input>
             = "'" s:identifier() "'"  { Value::String(s) }
@@ -38,26 +40,26 @@ peg::parser! {
             / "*"                          { SelectCols::All }
 
         rule constraint() -> &'input str
-            = !"PRIMARY" s:identifier() { s }
+            = !i("primary") s:identifier() { s }
 
         pub rule select_column_stmt() ->  SelectColStmt<'input>
-            = "COUNT" _* "(" _* c:columns() _* ")" { SelectColStmt::Count(c) }
-            / c:columns()                          { SelectColStmt::List(c) }
+            = i("count") _* "(" _* c:columns() _* ")" { SelectColStmt::Count(c) }
+            / c:columns()                             { SelectColStmt::List(c) }
 
         pub rule select() -> Select<'input>
-            = "SELECT" _+ c:select_column_stmt() _+ "FROM" _+ t:identifier()
+            = i("select") _+ c:select_column_stmt() _+ i("from") _+ t:identifier()
                 { Select { columns: c, table: t, expr: None }}
 
         pub rule column_def() -> ColumnDef<'input>
-            = n:identifier() _+ t:ty() _+ (constraint() _+)* "PRIMARY" _+ "KEY" (_+ constraint())*
+            = n:identifier() _+ t:ty() _+ (constraint() _+)* i("primary") _+ i("key") (_+ constraint())*
                 { ColumnDef { sql_type: t, name: n, primary_key: true } }
             / n:identifier() _+ t:ty() (_+ constraint())*
                 { ColumnDef { sql_type: t, name: n, primary_key: false } }
             / n:identifier() { ColumnDef { sql_type: SqlType::Text, name: n, primary_key: false }}
 
         pub rule create_table() -> CreateTable<'input>
-            = "CREATE" _+ "TABLE" _+ t:identifier() _+ "(" _* c:(column_def() ++ ("," _*)) _* ")" {
-                // Select first colunm as primary key if no one was specified.
+            = i("create") _+ i("table") _+ t:identifier() _* "(" _* c:(column_def() ++ ("," _*)) _* ")" {
+                // Select first column as primary key if no one was specified.
                 let mut primary_key = 0;
                 for (i, c) in c[1..].iter().enumerate() {
                     if c.primary_key  {
@@ -138,16 +140,14 @@ mod tests {
             })
         );
         assert_eq!(
-            sql::create_table(
-                "CREATE TABLE users ( id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT )"
-            ),
+            sql::create_table("create table users(id,name)"),
             Ok(CreateTable {
                 table_name: "users",
                 columns: vec![
                     ColumnDef {
-                        sql_type: SqlType::Integer,
+                        sql_type: SqlType::Text,
                         name: "id",
-                        primary_key: true
+                        primary_key: false
                     },
                     ColumnDef {
                         sql_type: SqlType::Text,
@@ -158,5 +158,31 @@ mod tests {
                 primary_key: 0,
             })
         );
+        assert_eq!(
+            sql::create_table(
+                "create table produto (id integer primary key autoincrement, nome text not null, preco text not null)"
+            ),
+            Ok(CreateTable {
+                table_name: "produto",
+                columns: vec![
+                    ColumnDef {
+                        sql_type: SqlType::Integer,
+                        name: "id",
+                        primary_key: true
+                    },
+                    ColumnDef {
+                        sql_type: SqlType::Text,
+                        name: "nome",
+                        primary_key: false,
+                    },
+                    ColumnDef {
+                        sql_type: SqlType::Text,
+                        name: "preco",
+                        primary_key: false
+                    }
+                ],
+                primary_key: 0
+            })
+        )
     }
 }
