@@ -1,0 +1,49 @@
+sql -> SELECT <column-stmt> FROM <tabela>
+     | SELECT <column-stmt> FROM <tabela> WHERE <expressao>
+     | CREATE TABLE <tabela> (<def-coluna>)
+     | CREATE TABLE IF NOT EXISTS <tabela> (<def-coluna>)
+
+column-stmt -> <colunas>
+             | COUNT(<colunas>)
+
+colunas -> <literal>
+         | <literal>, <colunas>
+         | *
+
+tabela -> <literal>
+
+expressao -> <literal> = <valor>
+           | <literal> < <valor>
+           | <literal> > <valor>
+           | <literal> >= <valor>
+           | <literal> <= <valor>
+           | <expressao> AND <expressao>
+           | <expressao> OR <expressao>
+
+
+valor -> '<str>' | <integer> | <float> | <boolean>
+
+def-coluna -> <literal>
+            | <literal> <tipo>
+            | <literal> <tipo> <restrições>
+            | <def-coluna>, <def-coluna>
+
+tipo -> NUMERIC
+      | INTEGER
+      | REAL
+      | BLOB
+      | TEXT
+
+restrições -> <str>
+
+espaço -> λ |
+
+literal ∈ ([a-z,A-Z]|_)+
+
+str ∈ utf-8
+
+integer ∈ ℤ
+
+boolean ∈ 𝔹
+
+float ∈ ℝ
