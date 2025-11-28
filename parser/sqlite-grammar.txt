@@ -12,7 +12,8 @@ colunas -> <literal>
 
 tabela -> <literal>
 
-expressao -> <literal> = <valor>
+expressao -> <literal> != <valor>
+           | <literal> = <valor>
            | <literal> < <valor>
            | <literal> > <valor>
            | <literal> >= <valor>

@@ -47,3 +47,17 @@ pub struct CreateTable<'a> {
     pub columns: Vec<ColumnDef<'a>>,
     pub primary_key: usize,
 }
+
+#[derive(Debug, PartialEq, Eq)]
+struct WhereExpression<'a> {
+    column: &'a str,
+    operator: &'a str, //ver se isso seria sqltype::operator ou alguma coisa operator
+    value: SqlType::Integer
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct SelectWhere<'a> {
+    expressions: Vec<&'a str>,
+    operator: Vec<&'a str>, //talvez fazer um enum de portas logicas seria uma boa?
+}
+
