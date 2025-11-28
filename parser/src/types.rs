@@ -28,10 +28,20 @@ pub enum SelectColStmt<'a> {
 }
 
 #[derive(Debug, PartialEq, Eq)]
+pub enum Operator {
+    Eq,
+    Neq,
+    Leq,
+    Geq,
+    Less,
+    Greater,
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub struct Select<'a> {
     pub columns: SelectColStmt<'a>,
     pub table: &'a str,
-    pub expr: Option<()>,
+    pub expr: Option<WhereExpression<'a>>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -49,10 +59,10 @@ pub struct CreateTable<'a> {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-struct WhereExpression<'a> {
-    column: &'a str,
-    operator: &'a str, //ver se isso seria sqltype::operator ou alguma coisa operator
-    value: SqlType::Integer
+pub struct WhereExpression<'a> {
+    pub v1: &'a str,
+    pub operator: Operator,
+    pub v2: &'a str,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -60,4 +70,3 @@ struct SelectWhere<'a> {
     expressions: Vec<&'a str>,
     operator: Vec<&'a str>, //talvez fazer um enum de portas logicas seria uma boa?
 }
-

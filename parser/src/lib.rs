@@ -46,9 +46,14 @@ peg::parser! {
             = i("count") _* "(" _* c:columns() _* ")" { SelectColStmt::Count(c) }
             / c:columns()                             { SelectColStmt::List(c) }
 
+        pub rule where_stmt() -> WhereExpression<'input>
+            = v1:value() _* o:operator() _* v2:value() { WhereExpression{ v1: "a", operator: o, v2: "a" } }
+
         pub rule select() -> Select<'input>
+            // = i("select") _+ c:select_column_stmt() _+ i("from") _+ t:identifier() _+ i("where") _+ w:where_stmt()
+            //     { Select { columns: c, table: t, expr: Some(w) }}
             = i("select") _+ c:select_column_stmt() _+ i("from") _+ t:identifier()
-                { Select { columns: c, table: t, expr: None }}
+                { Select { columns: c, table: t, expr: None}}
 
         pub rule column_def() -> ColumnDef<'input>
             = n:identifier() _+ t:ty() _+ (constraint() _+)* i("primary") _+ i("key") (_+ constraint())*
@@ -78,32 +83,37 @@ peg::parser! {
             //depois de WHERE vai vir EXPRESSÃO e dps pode vir ((AND ou OR) e dps EXPRESSÃO) e dps vai vir ;
             // uma expressão é: literal mais operador mais valor
             // operador é = ou (< que pode vir =) ou (> que pode vir =) ou !=
-        
-        
+
+
             //AJEITAR PARA QUE ELE POSSA SÓ SELECIONAR TODAS AS CELULAS DE UMA COLUNA
-        
-        pub rule operator() -> &'input str
-            = o:$("="/(("<"/">")"="?)/"!=") { o }//sinto que tem uma forma melhor de fazer isso
-        
-        pub rule where_expression() -> WhereExpression<'input>
-            = n:literal() _+ o:operator() _+ v:value {
-                WhereExpression{
-                    column: n,
-                    operator: o,
-                    value: v,
-                }
-            }
-        
-        pub rule logic_gate() -> &'input str
-            = l:$("AND"/"OR") { l }
-        
-        pub rule select_where() -> SelectWhere<'input> // DEPOIS FAZER COM QUE POSSA TER MAIS PORTAS LOGICAS E EXPRESSÕES
-            = "WHERE" _+ p:where_expression() (_+ l:logic_gate _+ s:where_expression())* ";" {
-                SelectWhere{
-                    expressions: vec![p, s],
-                    operator: vec![l]
-                }
-            }
+
+        pub rule operator() -> Operator
+            = "==" {Operator::Eq}
+            / "!=" {Operator::Neq}
+            / "<=" {Operator::Leq}
+            / "<"  {Operator::Less}
+            / ">=" {Operator::Geq}
+            / ">"  {Operator::Greater}
+
+        // pub rule where_expression() -> WhereExpression<'input>
+        //     = n:literal() _+ o:operator() _+ v:value() {
+        //         WhereExpression{
+        //             column: n,
+        //             operator: o,
+        //             value: v,
+        //         }
+        //     }
+        //
+        // pub rule logic_gate() -> &'input str
+        //     = l:$("AND"/"OR") { l }
+        //
+        // pub rule select_where() -> SelectWhere<'input> // DEPOIS FAZER COM QUE POSSA TER MAIS PORTAS LOGICAS E EXPRESSÕES
+        //     = "WHERE" _+ p:where_expression() (_+ l:logic_gate() _+ s:where_expression())* ";" {
+        //         SelectWhere{
+        //             expressions: vec![p, s],
+        //             operator: vec![l]
+        //         }
+        //     }
             //////////////////
             ///////////////////////////////
 
@@ -219,6 +229,16 @@ mod tests {
                 ],
                 primary_key: 0
             })
-        )
+        );
+    }
+
+    #[test]
+    fn operators() {
+        assert_eq!(sql::operator("=="), Ok(Operator::Eq));
+        assert_eq!(sql::operator("!="), Ok(Operator::Neq));
+        assert_eq!(sql::operator("<="), Ok(Operator::Leq));
+        assert_eq!(sql::operator("<"), Ok(Operator::Less));
+        assert_eq!(sql::operator(">="), Ok(Operator::Geq));
+        assert_eq!(sql::operator(">"), Ok(Operator::Greater));
     }
 }
