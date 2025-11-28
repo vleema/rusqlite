@@ -62,8 +62,8 @@ peg::parser! {
                 // Select first column as primary key if no one was specified.
                 let mut primary_key = 0;
                 for (i, c) in c[1..].iter().enumerate() {
-                    if c.primary_key  {
-                        primary_key = i;
+                    if c.primary_key {
+                        primary_key = i + 1;
                     }
                 }
                 CreateTable {
@@ -93,11 +93,7 @@ mod tests {
     fn select_column_stmt() {
         assert_eq!(
             sql::select_column_stmt("COUNT( id,name,   created_at )"),
-            Ok(SelectColStmt::Count(SelectCols::List(vec![
-                "id",
-                "name",
-                "created_at"
-            ])))
+            Ok(SelectColStmt::Count(SelectCols::List(vec!["id", "name", "created_at"])))
         );
         assert_eq!(
             sql::select_column_stmt("COUNT(*)"),
