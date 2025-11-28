@@ -1,4 +1,4 @@
-use crate::database::PageNumber;
+use crate::btree::PageNumber;
 use crate::varint::read_varint;
 
 #[derive(Debug)]
@@ -61,23 +61,22 @@ impl From<SerialType> for u64 {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Clone, Copy)]
-pub struct SchemaCell<'a> {
-    pub ty: &'a str,
-    pub name: &'a str,
-    pub tbl_name: &'a str,
+#[derive(Debug, Clone)]
+pub struct Schema {
+    pub ty: String,
+    pub name: String,
+    pub tbl_name: String,
     pub rootpage: PageNumber,
-    pub sql: &'a str,
+    pub sql: String,
 }
 
-impl<'a> SchemaCell<'a> {
-    pub fn new(mut payload: &'a [u8]) -> Self {
+impl Schema {
+    pub fn new(payload: Vec<u8>) -> Self {
         use SerialType::*;
 
-        let (header_size, header_int_size) = read_varint(&mut payload);
-        let header_size = (header_size - header_int_size as i64) as usize;
+        let mut cursor = payload.as_slice();
 
-        let mut cursor = &payload[..header_size];
+        read_varint(&mut cursor); // header size
         let Text { size: ty_size } = SerialType::from(read_varint(&mut cursor).0 as u64) else {
             panic!("invalid serial type for schema type")
         };
@@ -94,14 +93,12 @@ impl<'a> SchemaCell<'a> {
         let Text { size: sql_size } = SerialType::from(read_varint(&mut cursor).0 as u64) else {
             panic!("invalid serial type for schema sql")
         };
-
-        cursor = &payload[header_size..];
-        let ty = next_utf8(&mut cursor, ty_size as usize);
-        let name = next_utf8(&mut cursor, name_size as usize);
-        let tbl_name = next_utf8(&mut cursor, tbl_size as usize);
+        let ty = next_utf8(&mut cursor, ty_size as usize).to_owned();
+        let name = next_utf8(&mut cursor, name_size as usize).to_owned();
+        let tbl_name = next_utf8(&mut cursor, tbl_size as usize).to_owned();
         // If the rootpage is negative or doesn't fit... 💥
         let rootpage = read_varint(&mut cursor).0 as u32;
-        let sql = next_utf8(&mut cursor, sql_size as usize);
+        let sql = next_utf8(&mut cursor, sql_size as usize).to_owned();
 
         Self {
             ty,
