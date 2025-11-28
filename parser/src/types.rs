@@ -60,13 +60,19 @@ pub struct CreateTable<'a> {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct WhereExpression<'a> {
+<<<<<<< HEAD
     pub v1: &'a str,
     pub operator: Operator,
     pub v2: &'a str,
+=======
+    column: &'a str,
+    operator: &'a str, //ver se isso seria sqltype::operator ou alguma coisa operator
+    value: SqlType::Integer
+>>>>>>> 1e25443 (começo do where statement)
 }
 
 #[derive(Debug, PartialEq, Eq)]
-struct SelectWhere<'a> {
+pub struct SelectWhere<'a> {
     expressions: Vec<&'a str>,
     operator: Vec<&'a str>, //talvez fazer um enum de portas logicas seria uma boa?
 }
