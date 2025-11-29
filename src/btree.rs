@@ -161,7 +161,8 @@ pub enum Cell {
     Leaf(Entry),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
+#[allow(dead_code)]
 pub struct Entry {
     pub payload_size: u64,
     pub key: i64,
