@@ -132,7 +132,6 @@ impl<'a> Page<'a> {
                 let (key, _) = read_varint(&mut cell_content);
                 let payload = &cell_content[..payload_size as usize];
                 Cell::Leaf(Entry {
-                    payload_size: payload_size as u64,
                     key,
                     payload: payload.to_vec(),
                 })
@@ -161,10 +160,8 @@ pub enum Cell {
     Leaf(Entry),
 }
 
-#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct Entry {
-    pub payload_size: u64,
     pub key: i64,
     pub payload: Vec<u8>,
 }
