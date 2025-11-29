@@ -13,7 +13,7 @@ peg::parser! {
             = quiet! { n:$("-"? ['0'..='9']+ "." ['0'..='9']*) {? n.parse().or(Err("f64")) } }
 
         rule boolean() -> bool
-            = quiet! { ("true"/"1") { true } / ("false"/"0") { false } }
+            = quiet! { ("true") { true } / ("false") { false } }
 
         rule i(literal: &'static str)
             = input:$([_]*<{literal.len()}>)
@@ -46,9 +46,6 @@ peg::parser! {
             = i("count") _* "(" _* c:columns() _* ")" { SelectColStmt::Count(c) }
             / c:columns()                             { SelectColStmt::List(c) }
 
-        pub rule where_stmt() -> WhereExpression<'input>
-            = v1:value() _* o:operator() _* v2:value() { WhereExpression{ v1: "a", operator: o, v2: "a" } }
-
         pub rule select() -> Select<'input>
             // = i("select") _+ c:select_column_stmt() _+ i("from") _+ t:identifier() _+ i("where") _+ w:where_stmt()
             //     { Select { columns: c, table: t, expr: Some(w) }}
@@ -78,44 +75,38 @@ peg::parser! {
                 }
             }
 
-            ///////////////////////////////
-            //////////////////
-            //depois de WHERE vai vir EXPRESSÃO e dps pode vir ((AND ou OR) e dps EXPRESSÃO) e dps vai vir ;
-            // uma expressão é: literal mais operador mais valor
-            // operador é = ou (< que pode vir =) ou (> que pode vir =) ou !=
+        pub rule operator() -> &'input str
+            = o:$("=="/"!="/"<="/"<"/">="/">") { o }
 
+        pub rule where_expression() -> WhereExpression<'input>
+            = l:identifier() _+ o:operator() _+ v:value() {?
+                Ok(match o {
+                    "==" => WhereExpression::Eq(l, v),
+                    "!=" => WhereExpression::Neq(l, v), 
+                    "<=" => WhereExpression::Leq(l, v), 
+                    "<" => WhereExpression::Geq(l, v),  
+                    ">=" => WhereExpression::Less(l, v), 
+                    ">" => WhereExpression::Greater(l, v),
+                    _ => Err("invalid where expression")?,
+                })
+            }
 
-            //AJEITAR PARA QUE ELE POSSA SÓ SELECIONAR TODAS AS CELULAS DE UMA COLUNA
+        pub rule logic_gate() -> &'input str
+            = l:$("AND"/"OR") { l }
+        
+        pub rule where_expression_bool() -> WhereExpression<'input>
+            = l:where_expression() _+ o:logic_gate() _+ v:where_expression() {?
+                Ok(match o {
+                    "AND" => WhereExpression::AND(Box::new(l), Box::new(v)),
+                    "OR" => WhereExpression::OR(Box::new(l), Box::new(v)),
+                    _ => Err("invalid where logical expression")?, 
+                })
+            }
 
-        pub rule operator() -> Operator
-            = "==" {Operator::Eq}
-            / "!=" {Operator::Neq}
-            / "<=" {Operator::Leq}
-            / "<"  {Operator::Less}
-            / ">=" {Operator::Geq}
-            / ">"  {Operator::Greater}
+        pub rule select_where() -> WhereExpression<'input>
+            = "WHERE" _+ p:where_expression_bool()";" { p }
+            / "WHERE" _+ p:where_expression()";" { p } //VER SE TEM COMO N REPETIR O WHERE
 
-        // pub rule where_expression() -> WhereExpression<'input>
-        //     = n:literal() _+ o:operator() _+ v:value() {
-        //         WhereExpression{
-        //             column: n,
-        //             operator: o,
-        //             value: v,
-        //         }
-        //     }
-        //
-        // pub rule logic_gate() -> &'input str
-        //     = l:$("AND"/"OR") { l }
-        //
-        // pub rule select_where() -> SelectWhere<'input> // DEPOIS FAZER COM QUE POSSA TER MAIS PORTAS LOGICAS E EXPRESSÕES
-        //     = "WHERE" _+ p:where_expression() (_+ l:logic_gate() _+ s:where_expression())* ";" {
-        //         SelectWhere{
-        //             expressions: vec![p, s],
-        //             operator: vec![l]
-        //         }
-        //     }
-            //////////////////
-            ///////////////////////////////
 
     }
 
@@ -233,12 +224,21 @@ mod tests {
     }
 
     #[test]
-    fn operators() {
-        assert_eq!(sql::operator("=="), Ok(Operator::Eq));
-        assert_eq!(sql::operator("!="), Ok(Operator::Neq));
-        assert_eq!(sql::operator("<="), Ok(Operator::Leq));
-        assert_eq!(sql::operator("<"), Ok(Operator::Less));
-        assert_eq!(sql::operator(">="), Ok(Operator::Geq));
-        assert_eq!(sql::operator(">"), Ok(Operator::Greater));
+    fn where_expression() {
+        assert_eq!(
+            sql::where_expression("coluna == 90"),
+            Ok(WhereExpression::Eq("coluna", types::Value::Int(90)))
+        );
+        assert_eq!(
+            sql::where_expression("col up 70"),
+            Err("invalid where logical expression") // note: expected enum `Result<types::WhereExpression<'_>, ParseError<LineCol>>`
+                                                    //found enum `Result<_, &str>`
+                                                    //VER DEPOIS ESSE ERRO
+        );
     }
+
+    
+
+
+
 }

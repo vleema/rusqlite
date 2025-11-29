@@ -2,7 +2,7 @@
 pub enum Value<'a> {
     String(&'a str),
     Bool(bool),
-    Float(f64),
+    Float(f64), //VER DEPOIS ESSE PROBLEMA DO EQL COM O FLOAT, SE EU N PASSAR NADA, OU UM NAN, OQ ACONTECE?
     Int(i64),
 }
 
@@ -27,17 +27,7 @@ pub enum SelectColStmt<'a> {
     Count(SelectCols<'a>),
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum Operator {
-    Eq,
-    Neq,
-    Leq,
-    Geq,
-    Less,
-    Greater,
-}
-
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 pub struct Select<'a> {
     pub columns: SelectColStmt<'a>,
     pub table: &'a str,
@@ -58,21 +48,14 @@ pub struct CreateTable<'a> {
     pub primary_key: usize,
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct WhereExpression<'a> {
-<<<<<<< HEAD
-    pub v1: &'a str,
-    pub operator: Operator,
-    pub v2: &'a str,
-=======
-    column: &'a str,
-    operator: &'a str, //ver se isso seria sqltype::operator ou alguma coisa operator
-    value: SqlType::Integer
->>>>>>> 1e25443 (começo do where statement)
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct SelectWhere<'a> {
-    expressions: Vec<&'a str>,
-    operator: Vec<&'a str>, //talvez fazer um enum de portas logicas seria uma boa?
+#[derive(Debug, PartialEq)]
+pub enum WhereExpression<'a> {
+    Neq(&'a str, Value<'a>),
+    Eq(&'a str, Value<'a>),
+    Leq(&'a str, Value<'a>),
+    Geq(&'a str, Value<'a>),
+    Less(&'a str, Value<'a>),
+    Greater(&'a str, Value<'a>),
+    AND(Box<WhereExpression<'a>>, Box<WhereExpression<'a>>),
+    OR(Box<WhereExpression<'a>>, Box<WhereExpression<'a>>),
 }
