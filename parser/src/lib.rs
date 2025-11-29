@@ -225,11 +225,6 @@ mod tests {
             sql::where_expression("coluna == 90"),
             Ok(WhereExpression::Eq("coluna", types::Value::Int(90)))
         );
-        assert_eq!(
-            sql::where_expression("col up 70"),
-            Err("invalid where logical expression") // note: expected enum `Result<types::WhereExpression<'_>, ParseError<LineCol>>`
-                                                    //found enum `Result<_, &str>`
-                                                    //VER DEPOIS ESSE ERRO
-        );
+        assert!(matches!(sql::where_expression("col up 70"), Err(_)));
     }
 }
