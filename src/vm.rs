@@ -55,7 +55,7 @@ pub fn handle_query(db: &Database, query: &str) -> Result<()> {
                             Value::Int(i) => sum += i as f64,
                             Value::Float(i) => sum += i,
                             Value::Null => {}
-                            Value::String(_) => panic!("Cannot add strings"),
+                            Value::String(s) => sum += s.parse::<f64>().unwrap(),
                         }
                     }
                 }
