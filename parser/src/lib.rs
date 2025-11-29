@@ -13,8 +13,6 @@ peg::parser! {
         rule float() -> f64
             = quiet! { n:$("-"? ['0'..='9']+ "." ['0'..='9']*) {? n.parse().or(Err("f64")) } }
 
-        rule boolean() -> bool
-            = quiet! { ("true"/"1") { true } / ("false"/"0") { false } }
 
         rule i(literal: &'static str)
             = input:$([_]*<{literal.len()}>)
@@ -48,7 +46,7 @@ peg::parser! {
 
         pub rule select() -> Select<'input>
             = i("select") _+ c:select_column_stmt() _+ i("from") _+ t:identifier()
-                { Select { columns: c, table: t, expr: None }}
+                { Select { columns: c, table: t, expr: None } }
 
         pub rule column_def() -> ColumnDef<'input>
             = n:identifier() _+ t:ty() _+ (constraint() _+)* i("primary") _+ i("key") (_+ constraint())*
