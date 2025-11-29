@@ -7,7 +7,8 @@ peg::parser! {
         rule _ = quiet! { [' '|'\t'|'\n'] }
 
         rule integer() -> i64
-            = quiet! { n:$("-"? ['0'..='9']+) {? n.parse().or(Err("i64")) } }
+            = quiet! { ("true") { 1 } / ("false") { 0 } }
+            / quiet! { n:$("-"? ['0'..='9']+) {? n.parse().or(Err("i64")) } }
 
         rule float() -> f64
             = quiet! { n:$("-"? ['0'..='9']+ "." ['0'..='9']*) {? n.parse().or(Err("f64")) } }
@@ -31,7 +32,6 @@ peg::parser! {
 
         pub rule value() -> Value<'input>
             = "'" s:identifier() "'"  { Value::String(s) }
-            / b:boolean()             { Value::Bool(b) }
             / f:float()               { Value::Float(f) }
             / n:integer()             { Value::Int(n) }
 
