@@ -39,7 +39,6 @@ pub fn handle_query(db: &Database, query: &str) -> Result<()> {
             println!("{}", db.get_page(schema.rootpage).entries().count())
         }
         SelectColStmt::Avg(col) => {
-            dbg!(&col);
             let ct = sql::create_table(&schema.sql).expect("corrupt create table statement");
 
             let mut sum: f64 = 0.;
@@ -50,7 +49,7 @@ pub fn handle_query(db: &Database, query: &str) -> Result<()> {
                 let parsed_row = parse_entry(&ct, &cloned);
 
                 for (val, c) in parsed_row {
-                    if c.name == col {
+                    if c == col {
                         count += 1;
                         match val {
                             Value::Int(i) => sum += i as f64,
