@@ -47,7 +47,7 @@ pub struct Select<'a> {
     pub expr: Option<()>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct ColumnDef<'a> {
     pub sql_type: SqlType,
     pub name: &'a str,
