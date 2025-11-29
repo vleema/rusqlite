@@ -11,6 +11,7 @@ pub type PageNumber = u32;
 const MIN_PAGE_SIZE: u32 = 1 << 9; // 512
 const MAX_PAGE_SIZE: u32 = 1 << 16; // 65536, 64 KB
 
+#[derive(Debug)]
 pub struct Database {
     pub mmap: Mmap,
     pub page_size: u32,
@@ -45,7 +46,7 @@ const HDR_INTERIOR: usize = 12;
 const HDR_LEAF: usize = 8;
 
 #[allow(dead_code)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct PageCommon<'a> {
     db: &'a Database,
     data: &'a [u8],
@@ -56,7 +57,7 @@ pub struct PageCommon<'a> {
     cell_offset_list: &'a [u8],
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum Page<'a> {
     Interior { common: PageCommon<'a>, right_child: u32 },
     Leaf { common: PageCommon<'a> },
@@ -161,7 +162,7 @@ pub enum Cell {
 }
 
 #[allow(dead_code)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Entry {
     pub payload_size: u64,
     pub rowid: i64,
@@ -212,16 +213,18 @@ impl<'a> Iterator for EntryIter<'a> {
     type Item = Entry;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.curr_cell + 2 > self.curr_page.cell_offset_list().len() {
+        if self.curr_cell >= self.curr_page.cell_offset_list().len() {
+            self.curr_cell += 1;
             if let Page::Interior { right_child, .. } = &self.curr_page {
                 self.move_to_child(*right_child);
             } else {
-                while self.curr_cell + 2 > self.curr_page.cell_offset_list().len() {
+                while self.curr_cell > self.curr_page.cell_offset_list().len() {
                     if self.last_parent == 0 {
                         return None;
                     }
                     self.move_to_parent();
                 }
+                return self.next();
             }
         }
         let raw_list = self.curr_page.cell_offset_list();
