@@ -21,7 +21,7 @@ pub enum SerialType {
 }
 
 impl SerialType {
-    pub fn parse_payload<'a>(sts: &'a [SerialType], payload: &'a [u8]) -> impl Iterator<Item = Value<'a>> {
+    pub fn parse_payload<'a>(sts: &[SerialType], payload: &'a [u8]) -> impl Iterator<Item = Value<'a>> {
         use SerialType as T;
         use Value as V;
         let mut cursor = payload;
