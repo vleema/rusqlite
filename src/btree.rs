@@ -124,16 +124,16 @@ impl<'a> Page<'a> {
             Self::Interior { .. } => {
                 let left_child =
                     PageNumber::from_be_bytes([cell_content[0], cell_content[1], cell_content[2], cell_content[3]]);
-                let (rowid, _) = read_varint(&mut &cell_content[4..]);
-                Cell::Interior { left_child, rowid }
+                let (key, _) = read_varint(&mut &cell_content[4..]);
+                Cell::Interior { left_child, key }
             }
             Self::Leaf { .. } => {
                 let (payload_size, _) = read_varint(&mut cell_content);
-                let (rowid, _) = read_varint(&mut cell_content);
+                let (key, _) = read_varint(&mut cell_content);
                 let payload = &cell_content[..payload_size as usize];
                 Cell::Leaf(Entry {
                     payload_size: payload_size as u64,
-                    rowid,
+                    key,
                     payload: payload.to_vec(),
                 })
             }
@@ -157,7 +157,7 @@ impl<'a> Page<'a> {
 
 #[allow(dead_code)]
 pub enum Cell {
-    Interior { left_child: PageNumber, rowid: i64 },
+    Interior { left_child: PageNumber, key: i64 },
     Leaf(Entry),
 }
 
@@ -165,7 +165,7 @@ pub enum Cell {
 #[derive(Clone, Debug)]
 pub struct Entry {
     pub payload_size: u64,
-    pub rowid: i64,
+    pub key: i64,
     pub payload: Vec<u8>,
 }
 
