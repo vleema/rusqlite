@@ -1,7 +1,9 @@
-use crate::database::PageNumber;
+use parser::{SqlType, Value};
+
+use crate::btree::PageNumber;
 use crate::varint::read_varint;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum SerialType {
     Null,
     Int8,
@@ -16,6 +18,64 @@ pub enum SerialType {
     Internal,
     Blob { size: u64 },
     Text { size: u64 },
+}
+
+impl SerialType {
+    pub fn parse_payload<'a>(sts: &[SerialType], payload: &'a [u8]) -> impl Iterator<Item = Value<'a>> {
+        use SerialType as T;
+        use Value as V;
+        let mut cursor = payload;
+        sts.iter().filter_map(move |st| {
+            Some(match st {
+                T::Null => V::Null,
+                T::Int8 => {
+                    let val = i64::from_be_bytes([0, 0, 0, 0, 0, 0, 0, cursor[0]]);
+                    cursor = &cursor[1..];
+                    V::Int(val)
+                }
+                T::Int16 => {
+                    let val = i64::from_be_bytes([0, 0, 0, 0, 0, 0, cursor[0], cursor[1]]);
+                    cursor = &cursor[2..];
+                    V::Int(val)
+                }
+                T::Int24 => {
+                    let val = i64::from_be_bytes([0, 0, 0, 0, 0, cursor[0], cursor[1], cursor[2]]);
+                    cursor = &cursor[3..];
+                    V::Int(val)
+                }
+                T::Int32 => {
+                    let val = i64::from_be_bytes([0, 0, 0, 0, cursor[0], cursor[1], cursor[2], cursor[3]]);
+                    cursor = &cursor[4..];
+                    V::Int(val)
+                }
+                T::Int48 => {
+                    let val =
+                        i64::from_be_bytes([0, 0, cursor[0], cursor[1], cursor[2], cursor[3], cursor[4], cursor[5]]);
+                    cursor = &cursor[6..];
+                    V::Int(val)
+                }
+                T::Int64 => {
+                    let val = i64::from_be_bytes([
+                        cursor[0], cursor[1], cursor[2], cursor[3], cursor[4], cursor[5], cursor[6], cursor[7],
+                    ]);
+                    cursor = &cursor[8..];
+                    V::Int(val)
+                }
+                T::Float => {
+                    let val = f64::from_be_bytes([
+                        cursor[0], cursor[1], cursor[2], cursor[3], cursor[4], cursor[5], cursor[6], cursor[7],
+                    ]);
+                    cursor = &cursor[8..];
+                    V::Float(val)
+                }
+                T::Zero => V::Int(0),
+                T::One => V::Int(1),
+                T::Internal => None?,
+                T::Blob { .. } => None?,
+                T::Text { size } => V::String(next_utf8(&mut cursor, *size as usize)),
+            })
+        })
+    }
 }
 
 impl From<u64> for SerialType {
@@ -60,24 +120,45 @@ impl From<SerialType> for u64 {
     }
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Clone, Copy)]
-pub struct SchemaCell<'a> {
-    pub ty: &'a str,
-    pub name: &'a str,
-    pub tbl_name: &'a str,
-    pub rootpage: PageNumber,
-    pub sql: &'a str,
+impl From<SerialType> for Option<SqlType> {
+    fn from(value: SerialType) -> Self {
+        use SerialType as St;
+        use SqlType as T;
+        Some(match value {
+            St::Null => None?,
+            St::Int8 => T::Integer,
+            St::Int16 => T::Integer,
+            St::Int24 => T::Integer,
+            St::Int32 => T::Integer,
+            St::Int48 => T::Integer,
+            St::Int64 => T::Integer,
+            St::Float => T::Integer,
+            St::Zero => T::Numeric,
+            St::One => T::Numeric,
+            St::Internal => None?,
+            St::Blob { .. } => T::Blob,
+            St::Text { .. } => T::Text,
+        })
+    }
 }
 
-impl<'a> SchemaCell<'a> {
-    pub fn new(mut payload: &'a [u8]) -> Self {
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub struct Schema {
+    pub ty: String,
+    pub name: String,
+    pub tbl_name: String,
+    pub rootpage: PageNumber,
+    pub sql: String,
+}
+
+impl Schema {
+    pub fn new(payload: Vec<u8>) -> Self {
         use SerialType::*;
 
-        let (header_size, header_int_size) = read_varint(&mut payload);
-        let header_size = (header_size - header_int_size as i64) as usize;
+        let mut cursor = payload.as_slice();
 
-        let mut cursor = &payload[..header_size];
+        read_varint(&mut cursor); // header size
         let Text { size: ty_size } = SerialType::from(read_varint(&mut cursor).0 as u64) else {
             panic!("invalid serial type for schema type")
         };
@@ -94,14 +175,12 @@ impl<'a> SchemaCell<'a> {
         let Text { size: sql_size } = SerialType::from(read_varint(&mut cursor).0 as u64) else {
             panic!("invalid serial type for schema sql")
         };
-
-        cursor = &payload[header_size..];
-        let ty = next_utf8(&mut cursor, ty_size as usize);
-        let name = next_utf8(&mut cursor, name_size as usize);
-        let tbl_name = next_utf8(&mut cursor, tbl_size as usize);
+        let ty = next_utf8(&mut cursor, ty_size as usize).to_owned();
+        let name = next_utf8(&mut cursor, name_size as usize).to_owned();
+        let tbl_name = next_utf8(&mut cursor, tbl_size as usize).to_owned();
         // If the rootpage is negative or doesn't fit... 💥
         let rootpage = read_varint(&mut cursor).0 as u32;
-        let sql = next_utf8(&mut cursor, sql_size as usize);
+        let sql = next_utf8(&mut cursor, sql_size as usize).to_owned();
 
         Self {
             ty,

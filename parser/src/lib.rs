@@ -7,13 +7,14 @@ peg::parser! {
         rule _ = quiet! { [' '|'\t'|'\n'] }
 
         rule integer() -> i64
-            = quiet! { n:$("-"? ['0'..='9']+) {? n.parse().or(Err("i64")) } }
+            = quiet! { ("true") { 1 } / ("false") { 0 } }
+            / quiet! { n:$("-"? ['0'..='9']+) {? n.parse().or(Err("i64")) } }
 
         rule float() -> f64
             = quiet! { n:$("-"? ['0'..='9']+ "." ['0'..='9']*) {? n.parse().or(Err("f64")) } }
 
         rule boolean() -> bool
-            = quiet! { ("true") { true } / ("false") { false } }
+            = quiet! { ("true"/"1") { true } / ("false"/"0") { false } }
 
         rule i(literal: &'static str)
             = input:$([_]*<{literal.len()}>)
@@ -50,7 +51,7 @@ peg::parser! {
             // = i("select") _+ c:select_column_stmt() _+ i("from") _+ t:identifier() _+ i("where") _+ w:where_stmt()
             //     { Select { columns: c, table: t, expr: Some(w) }}
             = i("select") _+ c:select_column_stmt() _+ i("from") _+ t:identifier()
-                { Select { columns: c, table: t, expr: None}}
+                { Select { columns: c, table: t, expr: None }}
 
         pub rule column_def() -> ColumnDef<'input>
             = n:identifier() _+ t:ty() _+ (constraint() _+)* i("primary") _+ i("key") (_+ constraint())*
@@ -64,8 +65,8 @@ peg::parser! {
                 // Select first column as primary key if no one was specified.
                 let mut primary_key = 0;
                 for (i, c) in c[1..].iter().enumerate() {
-                    if c.primary_key  {
-                        primary_key = i;
+                    if c.primary_key {
+                        primary_key = i + 1;
                     }
                 }
                 CreateTable {
@@ -82,10 +83,10 @@ peg::parser! {
             = l:identifier() _+ o:operator() _+ v:value() {?
                 Ok(match o {
                     "==" => WhereExpression::Eq(l, v),
-                    "!=" => WhereExpression::Neq(l, v), 
-                    "<=" => WhereExpression::Leq(l, v), 
-                    "<" => WhereExpression::Geq(l, v),  
-                    ">=" => WhereExpression::Less(l, v), 
+                    "!=" => WhereExpression::Neq(l, v),
+                    "<=" => WhereExpression::Leq(l, v),
+                    "<" => WhereExpression::Geq(l, v),
+                    ">=" => WhereExpression::Less(l, v),
                     ">" => WhereExpression::Greater(l, v),
                     _ => Err("invalid where expression")?,
                 })
@@ -93,13 +94,13 @@ peg::parser! {
 
         pub rule logic_gate() -> &'input str
             = l:$("AND"/"OR") { l }
-        
+
         pub rule where_expression_bool() -> WhereExpression<'input>
             = l:where_expression() _+ o:logic_gate() _+ v:where_expression() {?
                 Ok(match o {
                     "AND" => WhereExpression::AND(Box::new(l), Box::new(v)),
                     "OR" => WhereExpression::OR(Box::new(l), Box::new(v)),
-                    _ => Err("invalid where logical expression")?, 
+                    _ => Err("invalid where logical expression")?,
                 })
             }
 
@@ -109,7 +110,6 @@ peg::parser! {
 
 
     }
-
 }
 
 #[cfg(test)]
@@ -130,11 +130,7 @@ mod tests {
     fn select_column_stmt() {
         assert_eq!(
             sql::select_column_stmt("COUNT( id,name,   created_at )"),
-            Ok(SelectColStmt::Count(SelectCols::List(vec![
-                "id",
-                "name",
-                "created_at"
-            ])))
+            Ok(SelectColStmt::Count(SelectCols::List(vec!["id", "name", "created_at"])))
         );
         assert_eq!(
             sql::select_column_stmt("COUNT(*)"),
@@ -236,9 +232,4 @@ mod tests {
                                                     //VER DEPOIS ESSE ERRO
         );
     }
-
-    
-
-
-
 }
