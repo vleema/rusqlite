@@ -88,6 +88,33 @@ fn handle_select_query(db: &Database, query: &str) -> Result<()> {
         SelectColStmt::Count(_) => {
             println!("{}", db.get_page(schema.rootpage).entries().count())
         }
+
+        SelectColStmt::Avg(col) => {
+            dbg!(&col);
+            let ct = sql::create_table(&schema.sql).expect("corrupt create table statement");
+
+            let mut sum: f64 = 0.;
+            let mut count: usize = 0;
+
+            for entry in db.get_page(schema.rootpage).entries() {
+                let cloned = entry.clone();
+                let parsed_row = parse_entry(&ct, &cloned);
+
+                for (val, c) in parsed_row {
+                    if c.name == col {
+                        count += 1;
+                        match val {
+                            Value::Int(i) => sum += i as f64,
+                            Value::Float(i) => sum += i,
+                            Value::Null => {}
+                            Value::String(_) => panic!("Cannot add strings"),
+                        }
+                    }
+                }
+            }
+
+            println!("{}", sum / count as f64);
+        }
     }
     Ok(())
 }
