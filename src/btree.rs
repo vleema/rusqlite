@@ -161,7 +161,6 @@ pub enum Cell {
     Leaf(Entry),
 }
 
-#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct Entry {
     pub payload_size: u64,
