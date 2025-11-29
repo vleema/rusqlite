@@ -38,6 +38,7 @@ pub enum SelectCols<'a> {
 pub enum SelectColStmt<'a> {
     List(SelectCols<'a>),
     Count(SelectCols<'a>),
+    Avg(&'a str),
 }
 
 #[derive(Debug, PartialEq, Eq)]

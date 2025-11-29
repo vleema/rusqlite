@@ -42,7 +42,8 @@ peg::parser! {
 
         pub rule select_column_stmt() ->  SelectColStmt<'input>
             = i("count") _* "(" _* c:columns() _* ")" { SelectColStmt::Count(c) }
-            / c:columns()                             { SelectColStmt::List(c) }
+            / i("avg") _* "(" _* s:identifier() _* ")"{ SelectColStmt::Avg(s)   }
+            / c:columns()                             { SelectColStmt::List(c)  }
 
         pub rule select() -> Select<'input>
             = i("select") _+ c:select_column_stmt() _+ i("from") _+ t:identifier()
