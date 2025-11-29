@@ -1,12 +1,25 @@
+use std::fmt::Display;
+
 #[derive(Debug, PartialEq)]
 pub enum Value<'a> {
     String(&'a str),
-    Bool(bool),
     Float(f64),
     Int(i64),
+    Null,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+impl Display for Value<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::String(v) => write!(f, "{v}"),
+            Self::Float(v) => write!(f, "{v}"),
+            Self::Int(v) => write!(f, "{v}"),
+            Self::Null => write!(f, "NULL"),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum SqlType {
     Integer,
     Text,
