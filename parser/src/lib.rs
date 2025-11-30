@@ -85,8 +85,8 @@ peg::parser! {
                     "==" => WhereExpression::Eq(l, v),
                     "!=" => WhereExpression::Neq(l, v),
                     "<=" => WhereExpression::Leq(l, v),
-                    "<" => WhereExpression::Geq(l, v),
-                    ">=" => WhereExpression::Less(l, v),
+                    "<" => WhereExpression::Less(l, v),
+                    ">=" => WhereExpression::Geq(l, v),
                     ">" => WhereExpression::Greater(l, v),
                     _ => Err("invalid where expression")?,
                 })
