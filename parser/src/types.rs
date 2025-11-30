@@ -41,11 +41,11 @@ pub enum SelectColStmt<'a> {
     Avg(&'a str),
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 pub struct Select<'a> {
     pub columns: SelectColStmt<'a>,
     pub table: &'a str,
-    pub expr: Option<()>,
+    pub expr: Option<WhereExpr<'a>>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -60,4 +60,16 @@ pub struct CreateTable<'a> {
     pub table_name: &'a str,
     pub columns: Vec<ColumnDef<'a>>,
     pub primary_key: usize,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum WhereExpr<'a> {
+    Neq(&'a str, Value<'a>),
+    Eq(&'a str, Value<'a>),
+    Leq(&'a str, Value<'a>),
+    Geq(&'a str, Value<'a>),
+    Le(&'a str, Value<'a>),
+    Ge(&'a str, Value<'a>),
+    And(Box<WhereExpr<'a>>, Box<WhereExpr<'a>>),
+    Or(Box<WhereExpr<'a>>, Box<WhereExpr<'a>>),
 }

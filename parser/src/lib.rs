@@ -45,9 +45,36 @@ peg::parser! {
             / i("avg") _* "(" _* s:identifier() _* ")"{ SelectColStmt::Avg(s)   }
             / c:columns()                             { SelectColStmt::List(c)  }
 
+        pub rule operator() -> &'input str
+            = o:$("="/"!="/"<="/"<"/">="/">") { o }
+
+        pub rule where_atom() -> WhereExpr<'input>
+            = l:identifier() _+ o:operator() _+ v:value() {
+                match o {
+                    "="  => WhereExpr::Eq(l, v),
+                    "!=" => WhereExpr::Neq(l, v),
+                    "<=" => WhereExpr::Leq(l, v),
+                    "<"  => WhereExpr::Le(l, v),
+                    ">=" => WhereExpr::Geq(l, v),
+                    ">"  => WhereExpr::Ge(l, v),
+                    _    => unreachable!(),
+                }
+            }
+
+        pub rule where_expr() -> WhereExpr<'input> = precedence! {
+                x:(@) _+ i("or") _+ y:@  { WhereExpr::Or(Box::new(x), Box::new(y)) }
+                --
+                x:(@) _+ i("and") _+ y:@ { WhereExpr::And(Box::new(x), Box::new(y)) }
+                --
+                e:where_atom()   { e }
+                "(" e:where_expr() ")" { e }
+            }
+
         pub rule select() -> Select<'input>
-            = i("select") _+ c:select_column_stmt() _+ i("from") _+ t:identifier()
-                { Select { columns: c, table: t, expr: None } }
+            = i("select") _+ c:select_column_stmt() _+ i("from") _+ t:identifier() _+ i("where") _+ w:where_expr()
+                { Select { columns: c, table: t, expr: Some(w) }}
+            / i("select") _+ c:select_column_stmt() _+ i("from") _+ t:identifier()
+                { Select { columns: c, table: t, expr: None }}
 
         pub rule column_def() -> ColumnDef<'input>
             = n:identifier() _+ t:ty() _+ (constraint() _+)* i("primary") _+ i("key") (_+ constraint())*
@@ -178,6 +205,24 @@ mod tests {
                 ],
                 primary_key: 0
             })
-        )
+        );
+    }
+
+    #[test]
+    fn where_expression() {
+        use Value::*;
+        use WhereExpr::*;
+        assert!(sql::where_atom("col up 70").is_err());
+        assert_eq!(sql::where_expr("coluna = 90"), Ok(WhereExpr::Eq("coluna", Int(90))));
+        assert_eq!(
+            sql::where_expr("coluna = 90 AND (comprimento >= 20 OR preco < 20)"),
+            Ok(And(
+                Box::new(Eq("coluna", Int(90))),
+                Box::new(Or(
+                    Box::new(Geq("comprimento", Int(20))),
+                    Box::new(Le("preco", Int(20)))
+                ))
+            )),
+        );
     }
 }
