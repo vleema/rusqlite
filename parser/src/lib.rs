@@ -114,6 +114,8 @@ peg::parser! {
 
 #[cfg(test)]
 mod tests {
+    use peg::error::ParseError;
+
     use super::*;
 
     #[test]
@@ -225,6 +227,6 @@ mod tests {
             sql::where_expression("coluna == 90"),
             Ok(WhereExpression::Eq("coluna", types::Value::Int(90)))
         );
-        assert!(matches!(sql::where_expression("col up 70"), Err(_)));
+        assert!(sql::where_expression("col up 70").is_err());
     }
 }
