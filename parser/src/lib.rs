@@ -18,8 +18,9 @@ peg::parser! {
             = input:$([_]*<{literal.len()}>)
                 {? if input.eq_ignore_ascii_case(literal) { Ok(()) } else { Err(literal) }}
 
-        rule identifier() -> &'input str
-            = l:$(['a'..='z'|'A'..='Z'|'_']['a'..='z'|'A'..='Z'|'_'|'0'..='9']*) { l }
+        pub rule identifier() -> &'input str
+            = l:$("\""['a'..='z'|'A'..='Z'|'_'|' ']['a'..='z'|'A'..='Z'|'_'|'0'..='9'|' ']* "\""?) { l }
+            / l:$(['a'..='z'|'A'..='Z'|'_']['a'..='z'|'A'..='Z'|'_'|'0'..='9']*) { l }
 
         pub rule ty() -> SqlType
             = (i("integer")/i("int"))               { SqlType::Integer }
@@ -34,7 +35,7 @@ peg::parser! {
             / n:integer()             { Value::Int(n) }
 
         rule columns() -> SelectCols<'input>
-            = l:(identifier() ++ ("," _*)) { SelectCols::List(l) }
+            = l:(identifier() ++ (_* "," _*)) { SelectCols::List(l) }
             / "*"                          { SelectCols::All }
 
         rule constraint() -> &'input str
@@ -84,7 +85,7 @@ peg::parser! {
             / n:identifier() { ColumnDef { sql_type: SqlType::Text, name: n, primary_key: false }}
 
         pub rule create_table() -> CreateTable<'input>
-            = i("create") _+ i("table") _+ t:identifier() _* "(" _* c:(column_def() ++ ("," _*)) _* ")" {
+            = i("create") _+ i("table") _+ t:identifier() _* "(" _* c:(column_def() ++ (_* "," _*)) _* ")" {
                 // Select first column as primary key if no one was specified.
                 let mut primary_key = 0;
                 for (i, c) in c[1..].iter().enumerate() {
@@ -104,6 +105,11 @@ peg::parser! {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn identifier() {
+        assert_eq!(sql::identifier("\"size range\""), Ok("\"size range\""))
+    }
 
     #[test]
     fn ty() {
