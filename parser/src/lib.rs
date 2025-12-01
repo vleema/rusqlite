@@ -48,9 +48,9 @@ peg::parser! {
             / c:columns()                             { SelectColStmt::List(c) }
 
         pub rule select() -> Select<'input>
-            // = i("select") _+ c:select_column_stmt() _+ i("from") _+ t:identifier() _+ i("where") _+ w:where_stmt()
-            //     { Select { columns: c, table: t, expr: Some(w) }}
-            = i("select") _+ c:select_column_stmt() _+ i("from") _+ t:identifier()
+             = i("select") _+ c:select_column_stmt() _+ i("from") _+ t:identifier() _+ w:select_where()
+                 { Select { columns: c, table: t, expr: Some(w) }}
+            / i("select") _+ c:select_column_stmt() _+ i("from") _+ t:identifier()
                 { Select { columns: c, table: t, expr: None }}
 
         pub rule column_def() -> ColumnDef<'input>
@@ -105,8 +105,8 @@ peg::parser! {
             }
 
         pub rule select_where() -> WhereExpression<'input>
-            = "WHERE" _+ p:where_expression_bool()";" { p }
-            / "WHERE" _+ p:where_expression()";" { p } //VER SE TEM COMO N REPETIR O WHERE
+            = i("where") _+ p:where_expression_bool()";" { p }
+            / i("where") _+ p:where_expression()";" { p } //VER SE TEM COMO N REPETIR O WHERE
 
 
     }
@@ -228,5 +228,17 @@ mod tests {
             Ok(WhereExpression::Eq("coluna", types::Value::Int(90)))
         );
         assert!(sql::where_expression("col up 70").is_err());
+    }
+
+        #[test]
+    fn select_with_where() {
+        assert_eq!(
+            sql::select("SELECT name FROM users WHERE coluna < 2;"),
+            Ok(Select {
+                columns: SelectColStmt::List(SelectCols::List(vec!["name"])),
+                table: "users",
+                expr: Some(WhereExpression::Less("coluna", types::Value::Int(2)))
+            })
+        );
     }
 }
