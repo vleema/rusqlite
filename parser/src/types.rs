@@ -1,9 +1,9 @@
 use std::fmt::Display;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Value<'a> {
     String(&'a str),
-    Bool(bool),
+    // Bool(bool),
     Float(f64),
     Int(i64),
     Null,
@@ -15,7 +15,7 @@ impl Display for Value<'_> {
             Self::String(v) => write!(f, "{v}"),
             Self::Float(v) => write!(f, "{v}"),
             Self::Int(v) => write!(f, "{v}"),
-            Self::Bool(v) => write!(f, "{v}"),
+            // Self::Bool(v) => write!(f, "{v}"),
             Self::Null => write!(f, "NULL"),
         }
     }
@@ -40,13 +40,14 @@ pub enum SelectCols<'a> {
 pub enum SelectColStmt<'a> {
     List(SelectCols<'a>),
     Count(SelectCols<'a>),
+    Avg(&'a str),
 }
 
 #[derive(Debug, PartialEq)]
 pub struct Select<'a> {
     pub columns: SelectColStmt<'a>,
     pub table: &'a str,
-    pub expr: Option<WhereExpression<'a>>,
+    pub expr: Option<WhereExpr<'a>>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -63,14 +64,14 @@ pub struct CreateTable<'a> {
     pub primary_key: usize,
 }
 
-#[derive(Debug, PartialEq)]
-pub enum WhereExpression<'a> {
+#[derive(Debug, PartialEq, Clone)]
+pub enum WhereExpr<'a> {
     Neq(&'a str, Value<'a>),
     Eq(&'a str, Value<'a>),
     Leq(&'a str, Value<'a>),
     Geq(&'a str, Value<'a>),
-    Less(&'a str, Value<'a>),
-    Greater(&'a str, Value<'a>),
-    AND(Box<WhereExpression<'a>>, Box<WhereExpression<'a>>),
-    OR(Box<WhereExpression<'a>>, Box<WhereExpression<'a>>),
+    Le(&'a str, Value<'a>),
+    Ge(&'a str, Value<'a>),
+    And(Box<WhereExpr<'a>>, Box<WhereExpr<'a>>),
+    Or(Box<WhereExpr<'a>>, Box<WhereExpr<'a>>),
 }

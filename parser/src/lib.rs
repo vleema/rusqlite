@@ -13,8 +13,6 @@ peg::parser! {
         rule float() -> f64
             = quiet! { n:$("-"? ['0'..='9']+ "." ['0'..='9']*) {? n.parse().or(Err("f64")) } }
 
-        rule boolean() -> bool
-            = quiet! { ("true"/"1") { true } / ("false"/"0") { false } }
 
         rule i(literal: &'static str)
             = input:$([_]*<{literal.len()}>)
@@ -32,7 +30,7 @@ peg::parser! {
 
         pub rule value() -> Value<'input>
             = "'" s:identifier() "'"  { Value::String(s) }
-            / b:boolean()             { Value::Bool(b) }
+            // / b:boolean()             { Value::Bool(b) }
             / f:float()               { Value::Float(f) }
             / n:integer()             { Value::Int(n) }
 
@@ -45,11 +43,37 @@ peg::parser! {
 
         pub rule select_column_stmt() ->  SelectColStmt<'input>
             = i("count") _* "(" _* c:columns() _* ")" { SelectColStmt::Count(c) }
-            / c:columns()                             { SelectColStmt::List(c) }
+            / i("avg") _* "(" _* s:identifier() _* ")"{ SelectColStmt::Avg(s)   }
+            / c:columns()                             { SelectColStmt::List(c)  }
+
+        pub rule operator() -> &'input str
+            = o:$("="/"!="/"<="/"<"/">="/">") { o }
+
+        pub rule where_atom() -> WhereExpr<'input>
+            = l:identifier() _+ o:operator() _+ v:value() {
+                match o {
+                    "="  => WhereExpr::Eq(l, v),
+                    "!=" => WhereExpr::Neq(l, v),
+                    "<=" => WhereExpr::Leq(l, v),
+                    "<"  => WhereExpr::Le(l, v),
+                    ">=" => WhereExpr::Geq(l, v),
+                    ">"  => WhereExpr::Ge(l, v),
+                    _    => unreachable!(),
+                }
+            }
+
+        pub rule where_expr() -> WhereExpr<'input> = precedence! {
+                x:(@) _+ i("or") _+ y:@  { WhereExpr::Or(Box::new(x), Box::new(y)) }
+                --
+                x:(@) _+ i("and") _+ y:@ { WhereExpr::And(Box::new(x), Box::new(y)) }
+                --
+                e:where_atom()   { e }
+                "(" e:where_expr() ")" { e }
+            }
 
         pub rule select() -> Select<'input>
-             = i("select") _+ c:select_column_stmt() _+ i("from") _+ t:identifier() _+ w:select_where()
-                 { Select { columns: c, table: t, expr: Some(w) }}
+            = i("select") _+ c:select_column_stmt() _+ i("from") _+ t:identifier() _+ i("where") _+ w:where_expr()
+                { Select { columns: c, table: t, expr: Some(w) }}
             / i("select") _+ c:select_column_stmt() _+ i("from") _+ t:identifier()
                 { Select { columns: c, table: t, expr: None }}
 
@@ -76,18 +100,15 @@ peg::parser! {
                 }
             }
 
-        pub rule operator() -> &'input str
-            = o:$("=="/"!="/"<="/"<"/">="/">") { o }
-
-        pub rule where_expression() -> WhereExpression<'input>
+        pub rule where_expression() -> WhereExpr<'input>
             = l:identifier() _+ o:operator() _+ v:value() {?
                 Ok(match o {
-                    "==" => WhereExpression::Eq(l, v),
-                    "!=" => WhereExpression::Neq(l, v),
-                    "<=" => WhereExpression::Leq(l, v),
-                    "<" => WhereExpression::Less(l, v),
-                    ">=" => WhereExpression::Geq(l, v),
-                    ">" => WhereExpression::Greater(l, v),
+                    "=" => WhereExpr::Eq(l, v),
+                    "!=" => WhereExpr::Neq(l, v),
+                    "<=" => WhereExpr::Leq(l, v),
+                    "<" => WhereExpr::Le(l, v),
+                    ">=" => WhereExpr::Geq(l, v),
+                    ">" => WhereExpr::Ge(l, v),
                     _ => Err("invalid where expression")?,
                 })
             }
@@ -95,16 +116,16 @@ peg::parser! {
         pub rule logic_gate() -> &'input str
             = l:$("AND"/"OR") { l }
 
-        pub rule where_expression_bool() -> WhereExpression<'input>
+        pub rule where_expression_bool() -> WhereExpr<'input>
             = l:where_expression() _+ o:logic_gate() _+ v:where_expression() {?
                 Ok(match o {
-                    "AND" => WhereExpression::AND(Box::new(l), Box::new(v)),
-                    "OR" => WhereExpression::OR(Box::new(l), Box::new(v)),
+                    "AND" => WhereExpr::And(Box::new(l), Box::new(v)),
+                    "OR" => WhereExpr::Or(Box::new(l), Box::new(v)),
                     _ => Err("invalid where logical expression")?,
                 })
             }
 
-        pub rule select_where() -> WhereExpression<'input>
+        pub rule select_where() -> WhereExpr<'input>
             = i("where") _+ p:where_expression_bool()";" { p }
             / i("where") _+ p:where_expression()";" { p } //VER SE TEM COMO N REPETIR O WHERE
 
@@ -114,8 +135,6 @@ peg::parser! {
 
 #[cfg(test)]
 mod tests {
-    use peg::error::ParseError;
-
     use super::*;
 
     #[test]
@@ -224,21 +243,27 @@ mod tests {
     #[test]
     fn where_expression() {
         assert_eq!(
-            sql::where_expression("coluna == 90"),
-            Ok(WhereExpression::Eq("coluna", types::Value::Int(90)))
+            sql::where_expression("coluna = 90"),
+            Ok(WhereExpr::Eq("coluna", types::Value::Int(90)))
         );
         assert!(sql::where_expression("col up 70").is_err());
     }
 
-        #[test]
+    #[test]
     fn select_with_where() {
+        use Value::*;
+        use WhereExpr::*;
+        assert!(sql::where_atom("col up 70").is_err());
+        assert_eq!(sql::where_expr("coluna = 90"), Ok(WhereExpr::Eq("coluna", Int(90))));
         assert_eq!(
-            sql::select("SELECT name FROM users WHERE coluna < 2;"),
-            Ok(Select {
-                columns: SelectColStmt::List(SelectCols::List(vec!["name"])),
-                table: "users",
-                expr: Some(WhereExpression::Less("coluna", types::Value::Int(2)))
-            })
+            sql::where_expr("coluna = 90 AND (comprimento >= 20 OR preco < 20)"),
+            Ok(And(
+                Box::new(Eq("coluna", Int(90))),
+                Box::new(Or(
+                    Box::new(Geq("comprimento", Int(20))),
+                    Box::new(Le("preco", Int(20)))
+                ))
+            )),
         );
     }
 }
