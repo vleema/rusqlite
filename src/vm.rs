@@ -1,12 +1,14 @@
 use anyhow::Context;
 use anyhow::Result;
 
+use clap::ValueEnum;
 use parser::ColumnDef;
 use parser::CreateTable;
 use parser::SelectColStmt;
 use parser::SelectCols;
 use parser::SqlType;
 use parser::Value;
+use parser::WhereExpr;
 use parser::sql;
 
 use crate::Database;
@@ -17,15 +19,84 @@ use crate::read_varint;
 
 type ParsedEntry<'a> = Vec<(&'a str, Value<'a>)>;
 
+fn match_sql_type_with_value(sql_t: &SqlType, v: &Value) -> bool {
+    match v {
+        Value::String(_) => *sql_t == SqlType::Text,
+        Value::Float(_) => *sql_t == SqlType::Numeric || *sql_t == SqlType::Real,
+        Value::Int(_) => *sql_t == SqlType::Integer,
+        Value::Null => true,
+    }
+}
+
+// TODO: maybe the op should be more generic
+fn cmp<'a>(row: &ParsedEntry<'a>, col: &str, v: &Value, op: impl Fn(f64, f64) -> bool) -> bool {
+    let Some((_, row_value)) = row.iter().find(|(c, _)| *c == col) else {
+        return false;
+    };
+
+    match (row_value, v) {
+        (Value::Int(a), Value::Int(b)) => op(*a as f64, *b as f64),
+        (Value::Float(a), Value::Float(b)) => op(*a, *b),
+        // TODO: dont know how to compare strings on lexicographical order below
+        (Value::String(a), Value::String(b)) => todo!(),
+        _ => false, // unreachable, because coresponding types where
+    }
+}
+
+fn criteria<'a>(expr: &Option<WhereExpr<'a>>, row: &ParsedEntry<'a>) -> bool {
+    use WhereExpr::*;
+
+    match expr {
+        None => true, // select without where
+        Some(e) => match &e {
+            Eq(col, v) => cmp(row, col, v, |a, b| a == b),
+            Neq(col, v) => cmp(row, col, v, |a, b| a != b),
+            Le(col, v) => cmp(row, col, v, |a, b| a < b),
+            Ge(col, v) => cmp(row, col, v, |a, b| a > b),
+            Leq(col, v) => cmp(row, col, v, |a, b| a <= b),
+            Geq(col, v) => cmp(row, col, v, |a, b| a >= b),
+            And(e1, e2) => criteria(&Some((**e1).clone()), row) && criteria(&Some((**e2).clone()), row),
+            Or(e1, e2) => criteria(&Some((**e1).clone()), row) || criteria(&Some((**e2).clone()), row),
+        },
+    }
+}
+
+// verify if the column referenced exists, and if so, if the types column and value match
+// example of behavior that should stop: `select name from users where idade = true`
+fn valid(expr: &Option<WhereExpr>, table: &CreateTable) -> bool {
+    use WhereExpr::*;
+
+    match expr {
+        None => true, // select without where
+        Some(e) => {
+            // select com where
+            match &e {
+                Neq(col_name, v)
+                | Eq(col_name, v)
+                | Leq(col_name, v)
+                | Geq(col_name, v)
+                | Le(col_name, v)
+                | Ge(col_name, v) => {
+                    match table.columns.iter().find(|x| &x.name == col_name) {
+                        None => false, // collumn referenced on where dont exist
+                        Some(&c) => match_sql_type_with_value(&c.sql_type, v),
+                    }
+                }
+                And(e1, e2) | Or(e1, e2) => valid(&Some((**e1).clone()), table) && valid(&Some((**e2).clone()), table),
+            }
+        }
+    }
+}
+
 pub fn handle_query(db: &Database, query: &str) -> Result<()> {
     let select = sql::select(query)?;
     let schema = get_tbl_schema(db, select.table)?;
     let ct = sql::create_table(&schema.sql).expect("corrupt table");
-    // Verificar se a expressão é válida comparando tipos e colunas com o que existe em `ct`
-    // Se for
-    //      Aplicar uma função que aceita ou não aceita uma entrada da tabela com base na expressão where
-    // Caso contrário
-    //      Erro (não é pânico)
+
+    if !valid(&select.expr, &ct) {
+        Err("Invalid where expression")
+    }
+
     match select.columns {
         SelectColStmt::List(list) => {
             let selected = match list {
@@ -37,7 +108,7 @@ pub fn handle_query(db: &Database, query: &str) -> Result<()> {
             };
             for e in db.get_page(schema.rootpage).entries() {
                 // Passar função que vocês implementaram aqui ↓
-                print_row(selected, parse_entry(&ct, &e), |_| true);
+                print_row(selected, parse_entry(&ct, &e), |row| criteria(&select.expr, row));
             }
         }
         SelectColStmt::Count(_) => {
@@ -72,6 +143,21 @@ pub fn handle_query(db: &Database, query: &str) -> Result<()> {
     Ok(())
 }
 
+fn cmp<'a, T, F>(row: &ParsedEntry<'a>, col: &str, v: &Value, op: F) -> bool
+where
+    F: Fn(T, T) -> bool,
+{
+    let Some((_, row_value)) = row.iter().find(|(c, _)| *c == col) else {
+        return false;
+    };
+
+    match (row_value, v) {
+        (Value::Int(a), Value::Int(b)) => op(*a as f64, *b as f64),
+        (Value::Float(a), Value::Float(b)) => op(*a, *b),
+        (Value::String(a), Value::String(b)) => op(a.parse::<f64>().unwrap_or(0.0), b.parse::<f64>().unwrap_or(0.0)),
+        _ => false, // unreachable
+    }
+}
 fn parse_entry<'a>(ct: &'a CreateTable<'a>, entry: &'a Entry) -> ParsedEntry<'a> {
     let (header_size, header_int_size) = read_varint(&mut entry.payload.as_slice());
     let mut header = &entry.payload[header_int_size as usize..header_size as usize];

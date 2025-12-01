@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Value<'a> {
     String(&'a str),
     Float(f64),
@@ -62,7 +62,7 @@ pub struct CreateTable<'a> {
     pub primary_key: usize,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum WhereExpr<'a> {
     Neq(&'a str, Value<'a>),
     Eq(&'a str, Value<'a>),
