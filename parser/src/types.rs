@@ -1,11 +1,21 @@
 use std::fmt::Display;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, PartialOrd)]
 pub enum Value<'a> {
     String(&'a str),
     Float(f64),
     Int(i64),
     Null,
+}
+
+#[derive(Debug)]
+pub enum Op {
+    Eq,
+    Neq,
+    Le,
+    Leq,
+    Ge,
+    Geq,
 }
 
 impl Display for Value<'_> {
@@ -62,7 +72,7 @@ pub struct CreateTable<'a> {
     pub primary_key: usize,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum WhereExpr<'a> {
     Neq(&'a str, Value<'a>),
     Eq(&'a str, Value<'a>),

@@ -6,6 +6,9 @@ peg::parser! {
     pub grammar sql() for str {
         rule _ = quiet! { [' '|'\t'|'\n'] }
 
+        rule string() -> &'input str
+            = s:$([c if c.is_ascii() && c != '\'']*) { s }
+
         rule integer() -> i64
             = quiet! { ("true") { 1 } / ("false") { 0 } }
             / quiet! { n:$("-"? ['0'..='9']+) {? n.parse().or(Err("i64")) } }
@@ -30,7 +33,7 @@ peg::parser! {
             / i("blob")                             { SqlType::Blob }
 
         pub rule value() -> Value<'input>
-            = "'" s:identifier() "'"  { Value::String(s) }
+            = "'" s:string() "'"     { Value::String(s) }
             / f:float()               { Value::Float(f) }
             / n:integer()             { Value::Int(n) }
 
