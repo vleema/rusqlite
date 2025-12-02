@@ -1,12 +1,22 @@
 use std::fmt::Display;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, PartialOrd)]
 pub enum Value<'a> {
     String(&'a str),
     // Bool(bool),
     Float(f64),
     Int(i64),
     Null,
+}
+
+#[derive(Debug)]
+pub enum Op {
+    Eq,
+    Neq,
+    Le,
+    Leq,
+    Ge,
+    Geq,
 }
 
 impl Display for Value<'_> {

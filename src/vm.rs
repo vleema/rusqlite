@@ -1,10 +1,9 @@
 use anyhow::Context;
 use anyhow::Result;
 
-use clap::Error;
-use clap::ValueEnum;
 use parser::ColumnDef;
 use parser::CreateTable;
+use parser::Op;
 use parser::SelectColStmt;
 use parser::SelectCols;
 use parser::SqlType;
@@ -30,17 +29,18 @@ fn match_sql_type_with_value(sql_t: &SqlType, v: &Value) -> bool {
 }
 
 // TODO: maybe the op should be more generic
-fn cmp<'a>(row: &ParsedEntry<'a>, col: &str, v: &Value, op: impl Fn(f64, f64) -> bool) -> bool {
+fn cmp<'a>(row: &ParsedEntry<'a>, col: &str, v: &Value, o: Op) -> bool {
     let Some((_, row_value)) = row.iter().find(|(c, _)| *c == col) else {
         return false;
     };
 
-    match (row_value, v) {
-        (Value::Int(a), Value::Int(b)) => op(*a as f64, *b as f64),
-        (Value::Float(a), Value::Float(b)) => op(*a, *b),
-        // TODO: dont know how to compare strings on lexicographical order below
-        (Value::String(a), Value::String(b)) => todo!(),
-        _ => false, // unreachable, because coresponding types where
+    match o {
+        Op::Eq => row_value == v,
+        Op::Neq => row_value != v,
+        Op::Le => row_value < v,
+        Op::Leq => row_value <= v,
+        Op::Ge => row_value > v,
+        Op::Geq => row_value >= v,
     }
 }
 
@@ -50,12 +50,12 @@ fn criteria<'a>(expr: &Option<WhereExpr<'a>>, row: &ParsedEntry<'a>) -> bool {
     match expr {
         None => true, // select without where
         Some(e) => match &e {
-            Eq(col, v) => cmp(row, col, v, |a, b| a == b),
-            Neq(col, v) => cmp(row, col, v, |a, b| a != b),
-            Le(col, v) => cmp(row, col, v, |a, b| a < b),
-            Ge(col, v) => cmp(row, col, v, |a, b| a > b),
-            Leq(col, v) => cmp(row, col, v, |a, b| a <= b),
-            Geq(col, v) => cmp(row, col, v, |a, b| a >= b),
+            Eq(col, v) => cmp(row, col, v, Op::Eq),
+            Neq(col, v) => cmp(row, col, v, Op::Neq),
+            Le(col, v) => cmp(row, col, v, Op::Le),
+            Ge(col, v) => cmp(row, col, v, Op::Ge),
+            Leq(col, v) => cmp(row, col, v, Op::Leq),
+            Geq(col, v) => cmp(row, col, v, Op::Geq),
             And(e1, e2) => criteria(&Some((**e1).clone()), row) && criteria(&Some((**e2).clone()), row),
             Or(e1, e2) => criteria(&Some((**e1).clone()), row) || criteria(&Some((**e2).clone()), row),
         },
