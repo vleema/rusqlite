@@ -33,9 +33,10 @@ peg::parser! {
             / i("blob")                             { SqlType::Blob }
 
         pub rule value() -> Value<'input>
-            = "'" s:string() "'"     { Value::String(s) }
-            / f:float()               { Value::Float(f) }
-            / n:integer()             { Value::Int(n) }
+            = "'" s:string() "'" { Value::String(s) }
+            / f:float()          { Value::Float(f) }
+            / n:integer()        { Value::Int(n) }
+            / i("null")          { Value::Null }
 
         rule columns() -> SelectCols<'input>
             = l:(identifier() ++ (_* "," _*)) { SelectCols::List(l) }
