@@ -190,7 +190,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rustqlite"
+name = "rusqlite"
 version = "0.1.0"
 dependencies = [
  "anyhow",
