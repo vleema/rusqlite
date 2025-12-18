@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-#[derive(Debug, PartialEq, Clone, PartialOrd)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Value<'a> {
     String(&'a str),
     Float(f64),
@@ -8,14 +8,17 @@ pub enum Value<'a> {
     Null,
 }
 
-#[derive(Debug)]
-pub enum Op {
-    Eq,
-    Neq,
-    Le,
-    Leq,
-    Ge,
-    Geq,
+impl PartialOrd for Value<'_> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        use Value::*;
+        match (self, other) {
+            (String(s), String(o)) => s.partial_cmp(o),
+            (Float(s), Float(o)) => s.partial_cmp(o),
+            (Int(s), Int(o)) => s.partial_cmp(o),
+            (Null, Null) => Some(std::cmp::Ordering::Equal),
+            _ => None,
+        }
+    }
 }
 
 impl Display for Value<'_> {
@@ -24,7 +27,7 @@ impl Display for Value<'_> {
             Self::String(v) => write!(f, "{v}"),
             Self::Float(v) => write!(f, "{v}"),
             Self::Int(v) => write!(f, "{v}"),
-            Self::Null => write!(f, "NULL"),
+            Self::Null => write!(f, ""),
         }
     }
 }

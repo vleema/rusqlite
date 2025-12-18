@@ -1,10 +1,9 @@
 use anyhow::Context;
 use anyhow::Result;
 
-use anyhow::bail;
+use anyhow::anyhow;
 use parser::ColumnDef;
 use parser::CreateTable;
-use parser::Op;
 use parser::SelectColStmt;
 use parser::SelectCols;
 use parser::SqlType;
@@ -23,10 +22,6 @@ pub fn handle_query(db: &Database, query: &str) -> Result<()> {
     let schema = get_tbl_schema(db, select.table)?;
     let ct = sql::create_table(&schema.sql).expect("corrupt table");
 
-    if !valid(select.expr.as_ref(), &ct) {
-        bail!("invalid where expression");
-    }
-
     match select.columns {
         SelectColStmt::List(list) => {
             let selected = match list {
@@ -37,9 +32,13 @@ pub fn handle_query(db: &Database, query: &str) -> Result<()> {
                 SelectCols::All => &ct.columns,
             };
             for e in db.get_page(schema.rootpage).entries() {
-                print_row(selected, parse_entry(&ct, &e), |row| {
-                    criteria(select.expr.as_ref(), row)
-                });
+                let pe = parse_entry(&ct, &e);
+                if let Some(expr) = &select.expr
+                    && !where_matches(expr, &pe)?
+                {
+                    continue;
+                }
+                print_row(selected, pe);
             }
         }
         SelectColStmt::Count(_) => {
@@ -76,66 +75,24 @@ pub fn handle_query(db: &Database, query: &str) -> Result<()> {
 
 type ParsedEntry<'a> = Vec<(&'a str, Value<'a>)>;
 
-fn match_sql_type_with_value(sql_t: &SqlType, v: &Value) -> bool {
-    match v {
-        Value::String(_) => *sql_t == SqlType::Text,
-        Value::Float(_) => *sql_t == SqlType::Numeric || *sql_t == SqlType::Real,
-        Value::Int(_) => *sql_t == SqlType::Integer,
-        Value::Null => true,
-    }
-}
-
-fn cmp<'a>(row: &ParsedEntry<'a>, col: &str, v: &Value, o: Op) -> bool {
-    let Some((_, row_value)) = row.iter().find(|(c, _)| *c == col) else {
-        return false;
+fn where_matches<'a>(we: &WhereExpr<'a>, pe: &'a ParsedEntry<'a>) -> Result<bool> {
+    use WhereExpr::*;
+    let get_col_value = |colname: &'a str, pe: &'a ParsedEntry<'a>| {
+        pe.iter()
+            .find_map(|(name, val)| (*name == colname).then_some(val))
+            .ok_or(anyhow!("invalid column name '{colname}' in where expression"))
     };
 
-    match o {
-        Op::Eq => row_value == v,
-        Op::Neq => row_value != v,
-        Op::Le => row_value < v,
-        Op::Leq => row_value <= v,
-        Op::Ge => row_value > v,
-        Op::Geq => row_value >= v,
-    }
-}
-
-fn criteria<'a>(expr: Option<&WhereExpr<'a>>, row: &ParsedEntry<'a>) -> bool {
-    use WhereExpr::*;
-
-    match expr {
-        None => true,
-        Some(e) => match &e {
-            Eq(col, v) => cmp(row, col, v, Op::Eq),
-            Neq(col, v) => cmp(row, col, v, Op::Neq),
-            Le(col, v) => cmp(row, col, v, Op::Le),
-            Ge(col, v) => cmp(row, col, v, Op::Ge),
-            Leq(col, v) => cmp(row, col, v, Op::Leq),
-            Geq(col, v) => cmp(row, col, v, Op::Geq),
-            And(e1, e2) => criteria(Some(e1.as_ref()), row) && criteria(Some(e2.as_ref()), row),
-            Or(e1, e2) => criteria(Some(e1.as_ref()), row) || criteria(Some(e2.as_ref()), row),
-        },
-    }
-}
-
-fn valid(expr: Option<&WhereExpr>, table: &CreateTable) -> bool {
-    use WhereExpr::*;
-
-    match expr {
-        None => true,
-        Some(e) => match &e {
-            Neq(col_name, v)
-            | Eq(col_name, v)
-            | Leq(col_name, v)
-            | Geq(col_name, v)
-            | Le(col_name, v)
-            | Ge(col_name, v) => match table.columns.iter().find(|x| &x.name == col_name) {
-                None => false,
-                Some(&c) => match_sql_type_with_value(&c.sql_type, v),
-            },
-            And(e1, e2) | Or(e1, e2) => valid(Some(e1.as_ref()), table) && valid(Some(e2.as_ref()), table),
-        },
-    }
+    Ok(match we {
+        Neq(c, v) => get_col_value(c, pe)? != v,
+        Eq(c, v) => get_col_value(c, pe)? == v,
+        Leq(c, v) => get_col_value(c, pe)? <= v,
+        Geq(c, v) => get_col_value(c, pe)? >= v,
+        Le(c, v) => get_col_value(c, pe)? < v,
+        Ge(c, v) => get_col_value(c, pe)? > v,
+        And(l, r) => where_matches(l, pe)? && where_matches(r, pe)?,
+        Or(l, r) => where_matches(l, pe)? || where_matches(r, pe)?,
+    })
 }
 
 fn parse_entry<'a>(ct: &'a CreateTable<'a>, entry: &'a Entry) -> ParsedEntry<'a> {
@@ -161,10 +118,7 @@ fn parse_entry<'a>(ct: &'a CreateTable<'a>, entry: &'a Entry) -> ParsedEntry<'a>
         .collect()
 }
 
-fn print_row<'a>(selected: &[ColumnDef], pe: ParsedEntry<'a>, p: impl FnOnce(&ParsedEntry<'a>) -> bool) {
-    if !p(&pe) {
-        return;
-    };
+fn print_row<'a>(selected: &[ColumnDef], pe: ParsedEntry<'a>) {
     let mut iter = selected
         .iter()
         .flat_map(|s| pe.iter().find_map(|(c, v)| (s.name == *c).then_some(v)));
